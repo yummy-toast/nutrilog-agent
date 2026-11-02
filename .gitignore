@@ -1,0 +1,7 @@
+.tools/
+.env
+.env.*
+!.env.example
+**/target/
+.idea/
+.DS_Store
