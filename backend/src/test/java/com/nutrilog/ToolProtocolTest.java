@@ -1,6 +1,6 @@
 package com.nutrilog;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.tool.ToolCallbacks;
+import org.springframework.ai.support.ToolCallbacks;
 import static org.junit.jupiter.api.Assertions.*;
 class ToolProtocolTest {
     @Test void executesThroughJsonToolProtocol() {

@@ -1,36 +1,53 @@
 # NutriLog Agent
 
-面向Java后端实习的饮食管理Agent，正在逐步实现。当前只有项目骨架、健康检查和营养计算工具；尚未实现食品库、记餐、登录或完整Agent。
+用于Java后端实习学习的饮食管理Agent，按小任务逐步实现。
 
-## 当前环境
+## 已实现与验证
 
-Java 21、Spring Boot 4.0.6、Spring AI 2.0.2、Maven 3.9.9。项目本地工具放在 `.tools/`，不提交Git。
+- Java21 / Spring Boot 4.0.6 / Spring AI 2.0.2项目骨架。
+- 确定性热量计算工具、参数校验、JSON工具协议测试。
+- 6项离线测试通过；无模型密钥可启动，HTTP健康检查返回200。
+- DeepSeek真实工具调用冒烟：输入116千卡/100克、200克，工具执行1次并返回232.00，模型回答232千卡。
 
-Intel Mac首次执行 `bash scripts/setup-macos.sh`，将工具下载到项目目录并运行测试。当前环境下载受限，构建尚未通过验证。
+以上仅证明最小链路；尚未实现食品库、登录、记餐、多轮对话、执行步数保护或完整Agent。测试用116是人工提供的协议测试数值，不作为某种食物的营养事实。
+
+## 本地启动
+
+需要JDK21及Maven3.9.9。Intel Mac可运行 `bash scripts/setup-macos.sh` 在 `.tools/` 内下载独立环境并运行测试，不替换系统Java。首次下载可能较慢。
+
+在项目根目录：
 
 ```sh
 export JAVA_HOME="$PWD/.tools/jdk/Contents/Home"
 export PATH="$JAVA_HOME/bin:$PWD/.tools/apache-maven-3.9.9/bin:$PATH"
-mvn -f backend/pom.xml test
-mvn -f backend/pom.xml spring-boot:run
+mvn -Dmaven.repo.local="$PWD/.tools/m2" -f backend/pom.xml verify
+java -jar backend/target/nutrilog-agent-0.0.1-SNAPSHOT.jar
 ```
 
-访问 `http://127.0.0.1:8080/api/v1/health`。默认不调用模型，不需要密钥。
+访问 `http://127.0.0.1:8080/api/v1/health`，默认仅监听本机且不调用模型。
 
-真实模型验证单独使用live配置；`.env.example`仅用于说明变量，Spring不会自动读取.env。请在终端设置环境变量，禁止提交密钥。
+同时提供官方Maven Wrapper（Maven3.9.9）：在JDK21可用时可用 `./backend/mvnw -f backend/pom.xml verify` 替代本机Maven命令；Wrapper会额外下载Maven发行包。本次构建使用项目本地Maven，未单独执行Wrapper下载。
 
-## 参考
+## 真实模型冒烟
 
-- https://github.com/leimuwife/Food_calories ：业务流程与工具调用设计参考。
-- https://github.com/buxiangshuohua0724/nutrition-agent ：数据来源与缺失值设计参考。
-- https://docs.spring.io/spring-ai/reference/getting-started.html ：版本兼容与集成。
-
-当前Java代码独立编写，没有复制上述项目代码或数据。尚未选定项目分发许可证。
-
-显式真实冒烟（需先设置密钥，会产生API费用）：
+先完成打包，在本地终端设置 `DEEPSEEK_API_KEY` 后运行：
 
 ```sh
-mvn -f backend/pom.xml spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=live,live-smoke --spring.main.web-application-type=none"
+bash scripts/live-smoke.sh
 ```
 
-冒烟会检查工具确实被调用；答案正确性仍需核对，不能据此声称完整Agent通过。
+脚本不会读取.env；示例配置只说明变量名。密钥不得提交Git或发送到聊天。真实请求会产生费用。本次验证模型为deepseek-chat、temperature=0、单次超时30秒、自动重试关闭；每次冒烟预期一次工具执行。尚未实现生产Agent的全局步数/总耗时限制。
+
+## 文档
+
+- [第一天讲解](docs/day01.md)
+- [实际验证记录](docs/verification-day01.md)
+- [实施与学习进度](docs/progress.md)
+
+## 参考与复用说明
+
+- https://github.com/leimuwife/Food_calories ：业务流程与工具调用设计参考。
+- https://github.com/buxiangshuohua0724/nutrition-agent ：来源与缺失值设计参考。
+- https://docs.spring.io/spring-ai/reference/getting-started.html ：兼容版本与集成。
+
+当前Java业务代码独立编写，未复制参考项目代码或数据。Maven Wrapper由Apache官方插件生成，保留原许可证声明；项目整体尚未选定分发许可证。

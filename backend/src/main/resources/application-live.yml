@@ -6,6 +6,8 @@ spring:
       api-key: ${DEEPSEEK_API_KEY}
       base-url: https://api.deepseek.com
       chat:
+        max-retries: 0
+        timeout: 30s
         options:
           model: deepseek-chat
           temperature: 0

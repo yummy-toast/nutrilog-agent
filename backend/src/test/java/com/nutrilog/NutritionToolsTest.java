@@ -11,6 +11,10 @@ class NutritionToolsTest {
         assertEquals(new BigDecimal("0.00"), tools.calculateCalories(BigDecimal.ZERO, BigDecimal.TEN));
         assertThrows(IllegalArgumentException.class, () -> tools.calculateCalories(null, BigDecimal.TEN));
     }
+    @Test void roundsOnlyAtDisplayBoundary() {
+        assertEquals(new BigDecimal("38.67"), tools.calculateCalories(new BigDecimal("116"), new BigDecimal("33.333")));
+        assertThrows(IllegalArgumentException.class, () -> tools.calculateCalories(new BigDecimal("-1"), BigDecimal.TEN));
+    }
     @Test void rejectsInvalidWeight() {
         assertThrows(IllegalArgumentException.class, () -> tools.calculateCalories(BigDecimal.TEN, BigDecimal.ZERO));
         assertThrows(IllegalArgumentException.class, () -> tools.calculateCalories(BigDecimal.TEN, new BigDecimal("-1")));

@@ -4,6 +4,12 @@ spring:
   ai:
     model:
       chat: none
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        transcription: none
+        speech: none
 server:
   address: 127.0.0.1
   port: 8080
