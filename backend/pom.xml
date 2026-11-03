@@ -9,5 +9,9 @@
     <dependency><groupId>org.springframework.ai</groupId><artifactId>spring-ai-starter-model-openai</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
   </dependencies>
-  <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+  <build><resources>
+    <resource><directory>src/main/resources</directory></resource>
+    <resource><directory>${project.basedir}/../data/usda</directory>
+      <includes><include>selected-foods.json</include></includes><targetPath>data</targetPath></resource>
+  </resources><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
 </project>

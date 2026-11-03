@@ -37,16 +37,15 @@ with (root / '.tools/food-http.log').open('w') as log:
         status, foods = request('/foods?' + query)
         assert status == 200 and len(foods) == 2
         assert {food['state'] for food in foods} == {'RAW', 'COOKED'}
-        status, result = request('/nutrition/calculate', {'foodId': 2, 'weightGrams': 200})
-        assert status == 200 and result['energy']['amount'] == 232 and result['source']['demo']
-        status, result = request('/nutrition/calculate', {'foodId': 3, 'weightGrams': 200})
-        assert result['carbohydrate']['amount'] is None
-        assert result['carbohydrate']['status'] == 'MISSING'
-        assert result['fat']['amount'] == 0 and result['fat']['status'] == 'KNOWN'
-        assert request('/nutrition/calculate', {'foodId': 2, 'weightGrams': 0})[0] == 400
+        status, result = request('/nutrition/calculate', {'foodId': 168935, 'weightGrams': 200})
+        assert status == 200 and result['energy']['amount'] == 260 and not result['source']['demo']
+        assert result['source']['externalId'] == 168935
+        assert 'with salt' in result['source']['originalDescription']
+        assert len(result['source']['archiveSha256']) == 64
+        assert request('/nutrition/calculate', {'foodId': 168935, 'weightGrams': 0})[0] == 400
         assert request('/nutrition/calculate', {'foodId': 999, 'weightGrams': 200})[0] == 404
         assert request('/nutrition/calculate', {})[0] == 400
-        print('食品HTTP检查通过：候选歧义、计算、来源标记、缺失与零值、400/404。')
+        print('食品HTTP检查通过：候选歧义、真实条目计算、来源与原始描述、400/404。')
     finally:
         process.terminate()
         try:

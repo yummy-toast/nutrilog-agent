@@ -9,7 +9,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class FoodService {
-    public record Source(String name, String version, boolean demo) {}
+    public record Source(String name, String version, boolean demo, long externalId,
+                         String originalDescription, String url, String archiveSha256) {}
     public record Nutrients(BigDecimal energyKcal, BigDecimal proteinGrams,
                             BigDecimal fatGrams, BigDecimal carbohydrateGrams) {}
     public record Food(long id, String name, String state, List<String> aliases,
@@ -18,14 +19,8 @@ public class FoodService {
     public record Calculation(long foodId, String name, String state, BigDecimal weightGrams,
                               Value energy, Value protein, Value fat, Value carbohydrate, Source source) {}
     private static BigDecimal n(String value) { return new BigDecimal(value); }
-    private static final Source DEMO = new Source("合成教学数据，不可作为饮食依据", "demo-v1", true);
-    private final List<Food> foods = List.of(
-        new Food(1, "演示生大米", "RAW", List.of("米饭", "大米"),
-                 new Nutrients(n("350"), n("7"), n("1"), n("78")), DEMO),
-        new Food(2, "演示熟米饭", "COOKED", List.of("米饭", "熟饭"),
-                 new Nutrients(n("116"), n("2.5"), n("0.3"), n("25")), DEMO),
-        new Food(3, "演示缺项食品", "UNKNOWN", List.of("缺项"),
-                 new Nutrients(n("100"), n("5"), BigDecimal.ZERO, null), DEMO));
+    private final List<Food> foods;
+    public FoodService(FoodCatalog catalog) { this.foods = List.copyOf(catalog.all()); }
 
     public List<Food> search(String keyword) {
         if (keyword == null || keyword.isBlank() || keyword.length() > 100)
