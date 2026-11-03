@@ -51,3 +51,15 @@ bash scripts/live-smoke.sh
 - https://docs.spring.io/spring-ai/reference/getting-started.html ：兼容版本与集成。
 
 当前Java业务代码独立编写，未复制参考项目代码或数据。Maven Wrapper由Apache官方插件生成，保留原许可证声明；项目整体尚未选定分发许可证。
+
+## 食品只读演示（2026-11-03）
+
+新增食品搜索、详情与按编号计算接口，目录暂存内存，全部为明确标记的合成教学数据。没有真实食品库或Agent业务工具注册。
+
+- `GET /api/v1/foods?keyword=米饭`：返回生/熟两个候选，不自动猜测。
+- `GET /api/v1/foods/2`：返回演示食品详情及来源标记。
+- `POST /api/v1/nutrition/calculate`，JSON为 `{"foodId":2,"weightGrams":200}`。
+- 返回各营养项目的amount/unit/status与source；缺失返回null/MISSING，真实零值为0/KNOWN。基础数据由服务端读取。
+- 重量无效或参数缺失返回400，食品不存在返回404。
+
+本轮累计10项离线测试通过；打包后可运行 `python3 scripts/food-http-smoke.py` 验证HTTP契约（本机18081端口，自动停止应用）。

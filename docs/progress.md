@@ -37,3 +37,14 @@
 - 具体结果与边界见verification-day01.md，覆盖前述“未完成构建”的历史状态。
 - 下一步先结合NutritionTools和LiveSmokeRunner讲解执行证据并理解验收，再进入食品数据模型与来源设计。
 - GitHub远程尚未建立，模型密钥与工具目录均不提交。
+
+## 2026-11-03：食品只读链路第一步
+
+- 对话理解验收：工具执行/参数、歧义、缺失与零值、重量依据、查询与写入、幂等、超时核查、归属检查、分项完整性、快照和版本冲突已完成问答。尚不代表对应业务已实现。
+- 本轮新增：内存演示食品目录、食品搜索/详情、按foodId与重量计算；共用FoodService。
+- 合成教学数据在名称和source.demo中明确标记，不可作饮食依据，无数据库或外部数据来源接入。
+- 10项离线测试通过，verify打包成功；HTTP独立脚本验证搜索歧义、232计算、缺失与零值、400/404。
+- 新接口：GET /api/v1/foods?keyword=米饭、GET /api/v1/foods/{id}、POST /api/v1/nutrition/calculate {foodId,weightGrams}。
+- 输入重量为克，范围(0,100000]；各项目独立KNOWN/MISSING，缺失amount=null，来源随结果返回。
+- 尚未接入Agent工具注册；原NutritionTools只供最小冒烟，不是食品查询业务。
+- 下一步核实可再分发的真实来源数据，设计数据导入与数据库持久化，再将同一服务暴露给Agent。
