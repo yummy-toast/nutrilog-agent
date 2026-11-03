@@ -72,3 +72,7 @@ bash scripts/live-smoke.sh
 已新增只读搜索和计算工具，共用FoodService。17项Java测试及两条真实模型路径验证通过：选定编号直接计算、歧义名称搜索后追问。尚无交互聊天接口或多轮状态管理。
 
 复现：`bash scripts/live-smoke.sh food-agent-smoke`（需先构建并配置本地密钥，有API费用）。详见[验证和职责说明](docs/agent-tools.md)。
+
+## 单轮聊天接口（2026-11-03）
+
+新增 `POST /api/v1/chat`，JSON请求 `{"message":"200克米饭多少热量？"}`。每次独立、只读、不保存历史或饮食记录。默认未配置模型返回503，live配置可真实查询。23项Java测试与两条真实HTTP样本通过。详见[接口、运行与边界](docs/single-turn-chat.md)。
