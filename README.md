@@ -66,3 +66,9 @@ bash scripts/live-smoke.sh
 本轮累计14项Java测试通过，打包Jar的HTTP验证通过。运行 `python3 scripts/food-http-smoke.py` 可复核。本轮未重跑付费模型；116×200→232仅为原有工具协议测试，不能当作当前熟米饭数据。
 
 目录读取通过FoodCatalog接口提供，FoodService只负责搜索与计算；后续数据库实现替换该接口，Agent工具和HTTP入口将继续复用同一服务。
+
+## 食品Agent工具（2026-11-03）
+
+已新增只读搜索和计算工具，共用FoodService。17项Java测试及两条真实模型路径验证通过：选定编号直接计算、歧义名称搜索后追问。尚无交互聊天接口或多轮状态管理。
+
+复现：`bash scripts/live-smoke.sh food-agent-smoke`（需先构建并配置本地密钥，有API费用）。详见[验证和职责说明](docs/agent-tools.md)。
