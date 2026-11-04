@@ -41,7 +41,7 @@ with (root/'.tools/chat-http.log').open('w') as log:
         assert call('/chat', {'message':' '})[0] == 400
         if args.live:
             status, result = call('/chat', {'message':'用户选定食品168935（长粒白米饭，熟，未强化，加盐），请查询200克的营养。'})
-            assert status == 200 and result['code'] == 'OK'
+            assert status == 200 and result['code'] == 'OK', (status, result)
             assert '260' in result['answer']
             print('COMPLETE', json.dumps(result, ensure_ascii=False))
             status, result = call('/chat', {'message':'200克呢？'})

@@ -11,6 +11,11 @@ public class ChatErrorHandler {
         String message = switch (failure.code()) {
             case "INVALID_MESSAGE" -> "消息须为1至2000个字符，且不能全为空白";
             case "MODEL_UNAVAILABLE" -> "模型尚未配置，请启用live配置";
+            case "MODEL_BUSY" -> "模型服务繁忙，请稍后重试";
+            case "MODEL_LIMIT_EXCEEDED", "TOOL_LIMIT_EXCEEDED" -> "本次查询达到执行次数上限，请简化问题后重试";
+            case "EXECUTION_TIMEOUT" -> "本次查询超过总时限，请稍后重试";
+            case "EXECUTION_CANCELLED" -> "本次查询已中断";
+            case "UNKNOWN_TOOL" -> "模型请求了不支持的工具";
             case "MODEL_TIMEOUT" -> "模型响应超时，请稍后重试";
             case "MODEL_EMPTY_RESPONSE" -> "模型未返回有效回答";
             default -> "模型服务调用失败，请稍后重试";
