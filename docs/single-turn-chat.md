@@ -4,8 +4,8 @@ POST /api/v1/chat，Content-Type: application/json。
 
 请求：`{"message":"200克米饭多少热量？"}`。仅使用message，每次请求独立，不接入历史、用户身份或写入能力。未知食品/缺参正常追问；工具无结果不编造。没有多轮记忆，用户需要重新提交完整问题。
 
-成功：HTTP200，`{"code":"OK","answer":"..."}`。正常追问也属于成功。
-错误：`{"code":"...","message":"..."}`，不返回上游错误正文和堆栈。
+成功：HTTP200，`{"code":"OK","answer":"...","requestId":"..."}`。正常追问也属于成功。
+错误：`{"code":"...","message":"...","requestId":"..."}`，不返回上游错误正文和堆栈。
 
 - 400 INVALID_MESSAGE：null、空白或超过2000个Java UTF-16代码单元的消息。
 - 400 INVALID_REQUEST：缺失请求体或非法JSON。

@@ -16,10 +16,16 @@ class ChatApiTest {
     private final Stub gateway = new Stub();
     private org.springframework.test.web.servlet.MockMvc api() {
         return MockMvcBuilders.standaloneSetup(new ChatController(new ChatService(gateway)))
-            .setControllerAdvice(new ChatErrorHandler()).build();
+            .setControllerAdvice(new ChatErrorHandler()).addInterceptors(new ChatTraceInterceptor()).build();
     }
     private org.springframework.mock.web.MockHttpServletResponse send(String json) throws Exception {
-        return api().perform(post("/api/v1/chat").contentType(MediaType.APPLICATION_JSON).content(json)).andReturn().getResponse();
+        var response = api().perform(post("/api/v1/chat").header("X-Request-Id", "untrusted-client-id")
+            .contentType(MediaType.APPLICATION_JSON).content(json)).andReturn().getResponse();
+        var body = tools.jackson.databind.json.JsonMapper.builder().build().readTree(response.getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+        assertEquals(response.getHeader("X-Request-Id"), body.get("requestId").asString());
+        assertNotEquals("untrusted-client-id", body.get("requestId").asString());
+        assertDoesNotThrow(() -> java.util.UUID.fromString(body.get("requestId").asString()));
+        return response;
     }
     @Test void rejectsInvalidMessagesBeforeModel() throws Exception {
         for (String json : new String[]{"{}", "null", "{\"message\":\" \"}", "{\"message\":null}", "{\"message\":\""+"a".repeat(2001)+"\"}"})

@@ -25,9 +25,13 @@ def call(path, body=None):
         headers={'Content-Type':'application/json'})
     try:
         with urllib.request.urlopen(req, timeout=100) as response:
-            return response.status, json.load(response)
+            body = json.load(response)
+            if path == '/chat': assert body['requestId'] == response.headers.get('X-Request-Id')
+            return response.status, body
     except urllib.error.HTTPError as response:
-        return response.code, json.load(response)
+        body = json.load(response)
+        if path == '/chat': assert body['requestId'] == response.headers.get('X-Request-Id')
+        return response.code, body
 with (root/'.tools/chat-http.log').open('w') as log:
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
     try:

@@ -15,9 +15,15 @@ public final class BudgetedChatLoop implements AutoCloseable {
             var thread = new Thread(task, "chat-model-worker"); thread.setDaemon(true); return thread;
         }, new ThreadPoolExecutor.AbortPolicy());
     public String run(ChatModel model, List<ToolCallback> callbacks, String system, String input) {
-        return run(model, callbacks, system, input, new ExecutionBudget());
+        return run(model, callbacks, system, input, new ExecutionBudget(), new RequestTrace());
+    }
+    public String run(ChatModel model, List<ToolCallback> callbacks, String system, String input, RequestTrace trace) {
+        return run(model, callbacks, system, input, new ExecutionBudget(), trace);
     }
     String run(ChatModel model, List<ToolCallback> callbacks, String system, String input, ExecutionBudget budget) {
+        return run(model, callbacks, system, input, budget, new RequestTrace());
+    }
+    private String run(ChatModel model, List<ToolCallback> callbacks, String system, String input, ExecutionBudget budget, RequestTrace trace) {
         var allowed = new HashMap<String, ToolCallback>();
         callbacks.forEach(c -> allowed.put(c.getToolDefinition().name(), c));
         var messages = new ArrayList<Message>(List.of(new SystemMessage(system), new UserMessage(input)));
@@ -26,10 +32,13 @@ public final class BudgetedChatLoop implements AutoCloseable {
             var base = model.getDefaultOptions();
             var builder = base instanceof OpenAiChatOptions openAi ? openAi.mutate() : OpenAiChatOptions.builder();
             var options = builder.toolCallbacks(callbacks).timeout(timeout).maxRetries(0).build();
+            long modelStart = trace.modelStarted();
+            String modelStatus = "ERROR";
+            org.springframework.ai.chat.model.ChatResponse response;
+            try {
             Future<org.springframework.ai.chat.model.ChatResponse> future;
             try { future = workers.submit(() -> model.call(new Prompt(List.copyOf(messages), options))); }
             catch (RejectedExecutionException busy) { throw new ChatFailure("MODEL_BUSY", 503); }
-            org.springframework.ai.chat.model.ChatResponse response;
             try { response = future.get(Math.min(timeout.toNanos(), budget.remaining().toNanos()), TimeUnit.NANOSECONDS); }
             catch (TimeoutException expired) {
                 future.cancel(true);
@@ -45,6 +54,8 @@ public final class BudgetedChatLoop implements AutoCloseable {
                 throw new ChatFailure("MODEL_ERROR", 502);
             }
             budget.remaining();
+            modelStatus = "OK";
+            } finally { trace.modelFinished(modelStart, modelStatus); }
             if (response == null || response.getResult() == null) return null;
             var output = response.getResult().getOutput();
             if (output == null) return null;
@@ -55,12 +66,24 @@ public final class BudgetedChatLoop implements AutoCloseable {
                 budget.beforeTool();
                 var callback = allowed.get(call.name());
                 if (callback == null) throw new ChatFailure("UNKNOWN_TOOL", 502);
-                String result = callback.call(call.arguments());
-                budget.remaining();
+                long toolStart = trace.toolStarted(callback.getToolDefinition().name());
+                String toolStatus = "ERROR";
+                String result;
+                try {
+                    result = callback.call(call.arguments());
+                    budget.remaining();
+                    toolStatus = businessStatus(result);
+                } finally { trace.toolFinished(callback.getToolDefinition().name(), toolStart, toolStatus); }
                 results.add(new ToolResponseMessage.ToolResponse(call.id(), call.name(), result));
             }
             messages.add(ToolResponseMessage.builder().responses(results).build());
         }
+    }
+    private String businessStatus(String result) {
+        try {
+            var status = tools.jackson.databind.json.JsonMapper.builder().build().readTree(result).path("status").asString("");
+            return Set.of("OK", "NOT_FOUND", "INVALID_ARGUMENT").contains(status) ? status : "COMPLETED";
+        } catch (RuntimeException malformed) { return "COMPLETED"; }
     }
     @Override public void close() { workers.shutdownNow(); }
 }
