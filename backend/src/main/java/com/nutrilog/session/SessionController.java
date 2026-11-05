@@ -23,6 +23,11 @@ public class SessionController {
     @GetMapping("/{id}") public SessionDirectory.View get(@PathVariable UUID id, Principal principal) {
         return directory.get(owner(principal),id);
     }
+    @GetMapping("/{id}/history")
+    public SessionDirectory.Snapshot history(@PathVariable UUID id, Principal principal) {
+        return directory.snapshot(owner(principal), id);
+    }
+
     @DeleteMapping("/{id}") @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID id, Principal principal) { directory.delete(owner(principal),id); }
 }

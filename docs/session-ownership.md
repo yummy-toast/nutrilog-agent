@@ -49,3 +49,11 @@ python3 scripts/session-auth-smoke.py --no-demo
 没有消息历史、会话状态更新、同会话串行门禁、会话聊天入口或数据库。现有POST /chat仍是独立请求，不接受sessionId。后续先接消息存储与会话执行门禁，再把多轮上下文交给模型。
 
 参考：https://docs.spring.io/spring-security/reference/servlet/authentication/passwords/form.html 与 https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html 。
+
+## 会话快照与执行门禁
+
+GET /api/v1/sessions/{UUID}/history 在归属检查后返回已提交的 turns 和 state。新会话的历史与候选为空，选中食品、重量和重量依据为 null。
+
+SessionDirectory.executeTurn 在单个会话上获取执行权，将已提交快照交给执行器。执行器成功返回回答与新状态后，目录一次发布用户消息、回答和状态。异常保留原快照。历史查询可在执行期间读取上一次已提交结果。同一会话正在执行时，其他轮次或删除返回 409 SESSION_BUSY。不同会话的执行权独立。
+
+本阶段继续使用单进程内存。提交路径通过假执行器验证，会话消息的 HTTP 写入口及多轮模型接入在下一阶段实现。41 项 Java 测试通过，覆盖失败回滚、并发门禁、归属与历史接口。

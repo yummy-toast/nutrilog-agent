@@ -12,6 +12,7 @@ public class SessionErrorHandler {
         String code=switch(error.getStatusCode().value()) {
             case 401 -> "UNAUTHORIZED";
             case 403 -> "SESSION_ACCESS_DENIED";
+            case 409 -> "SESSION_BUSY";
             default -> "INVALID_REQUEST";
         };
         return ResponseEntity.status(error.getStatusCode()).body(Map.of("code",code));

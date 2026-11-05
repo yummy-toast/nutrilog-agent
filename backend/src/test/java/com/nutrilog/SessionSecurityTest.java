@@ -51,6 +51,12 @@ class SessionSecurityTest {
             String id=JsonMapper.builder().build().readTree(created.getContentAsString()).get("sessionId").asString();
             assertEquals(200,api.perform(get("/api/v1/sessions/"+id).session(alice)).andReturn().getResponse().getStatus());
             assertEquals(403,api.perform(get("/api/v1/sessions/"+id).session(bob)).andReturn().getResponse().getStatus());
+            var history = api.perform(get("/api/v1/sessions/"+id+"/history").session(alice))
+                .andReturn().getResponse();
+            assertEquals(200, history.getStatus());
+            assertTrue(JsonMapper.builder().build().readTree(history.getContentAsString()).get("turns").isEmpty());
+            assertEquals(403, api.perform(get("/api/v1/sessions/"+id+"/history").session(bob))
+                .andReturn().getResponse().getStatus());
             assertEquals(403,api.perform(delete("/api/v1/sessions/"+id).session(bob)
                 .header("X-CSRF-TOKEN",csrf(api,bob))).andReturn().getResponse().getStatus());
             assertEquals(200,api.perform(post("/api/v1/auth/logout").session(alice)
