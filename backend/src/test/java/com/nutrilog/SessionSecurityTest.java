@@ -27,7 +27,8 @@ class SessionSecurityTest {
     @Configuration @EnableWebSecurity @EnableWebMvc
     @Import({SecurityConfiguration.class,AuthController.class,SessionDirectory.class,SessionController.class,SessionErrorHandler.class,SessionChatController.class,ChatService.class,SpringAiChatGateway.class,ChatErrorHandler.class,ChatTraceConfiguration.class})
     static class Config {
-        @Bean FoodAgentTools foodTools() { return new FoodAgentTools(new FoodService(new JsonFoodCatalog())); }
+        @Bean FoodService foods() { return new FoodService(new JsonFoodCatalog()); }
+        @Bean FoodAgentTools foodTools(FoodService foods) { return new FoodAgentTools(foods); }
         @Bean ChatModel model() {
             return prompt -> {
                 var messages = prompt.getInstructions();
@@ -35,7 +36,17 @@ class SessionSecurityTest {
                 if (input.equals("模拟超时"))
                     throw new IllegalStateException(new java.net.SocketTimeoutException());
                 String answer;
-                if (input.equals("200克呢？")) {
+                if (input.equals("确认熟米饭") || input.equals("更新重量") || input.equals("改成生米")) {
+                    String system = messages.getFirst().getText();
+                    if (input.equals("改成生米")) {
+                        assertTrue(system.contains("食品编号：169756"));
+                        assertTrue(system.contains("重量（克）：未确认"));
+                    } else {
+                        assertTrue(system.contains("食品编号：168935"));
+                        assertTrue(system.contains(input.equals("更新重量") ? "重量（克）：250" : "重量（克）：200"));
+                    }
+                    answer = "已收到";
+                } else if (input.equals("200克呢？")) {
                     assertEquals(4, messages.size());
                     assertEquals(MessageType.USER, messages.get(1).getMessageType());
                     assertEquals("查熟米饭", messages.get(1).getText());
@@ -52,9 +63,12 @@ class SessionSecurityTest {
         }
     }
     private MockHttpServletResponse send(MockMvc api, MockHttpSession session, String id, String input) throws Exception {
+        return send(api, session, id, java.util.Map.of("message", input));
+    }
+    private MockHttpServletResponse send(MockMvc api, MockHttpSession session, String id, java.util.Map<String,?> body) throws Exception {
         return api.perform(post("/api/v1/sessions/"+id+"/messages").session(session)
             .header("X-CSRF-TOKEN",csrf(api,session)).contentType("application/json")
-            .content(JsonMapper.builder().build().writeValueAsString(java.util.Map.of("message", input))))
+            .content(JsonMapper.builder().build().writeValueAsString(body)))
             .andReturn().getResponse();
     }
     private MockHttpSession login(MockMvc api, String user, String password) throws Exception {
@@ -106,6 +120,24 @@ class SessionSecurityTest {
             var committed = api.perform(get("/api/v1/sessions/"+id+"/history").session(alice))
                 .andReturn().getResponse();
             assertEquals(2, JsonMapper.builder().build().readTree(committed.getContentAsByteArray()).get("turns").size());
+            assertEquals(400, send(api, alice, id, java.util.Map.of("message", "不应调用模型", "weightGrams", 200)).getStatus());
+            assertEquals(404, send(api, alice, id, java.util.Map.of("message", "不应调用模型", "selectedFoodId", 99999)).getStatus());
+            assertEquals(400, send(api, alice, id, java.util.Map.of("message", "不应调用模型", "selectedFoodId", 168935,
+                "weightGrams", new java.math.BigDecimal("0.0001"))).getStatus());
+            assertEquals(200, send(api, alice, id, java.util.Map.of("message", "确认熟米饭",
+                "selectedFoodId", 168935, "weightGrams", 200)).getStatus());
+            var directory = context.getBean(SessionDirectory.class);
+            var sessionId = java.util.UUID.fromString(id);
+            assertEquals("USER_CONFIRMED", directory.snapshot("alice", sessionId).state().weightBasis());
+            assertEquals(200, send(api, alice, id, java.util.Map.of("message", "更新重量", "weightGrams", 250)).getStatus());
+            var beforeTimeout = directory.snapshot("alice", sessionId);
+            assertEquals(504, send(api, alice, id, java.util.Map.of("message", "模拟超时", "selectedFoodId", 169756)).getStatus());
+            assertEquals(beforeTimeout, directory.snapshot("alice", sessionId));
+            assertEquals(200, send(api, alice, id, java.util.Map.of("message", "改成生米", "selectedFoodId", 169756)).getStatus());
+            var changed = directory.snapshot("alice", sessionId).state();
+            assertEquals(169756L, changed.selectedFoodId());
+            assertNull(changed.weightGrams());
+            assertNull(changed.weightBasis());
             assertEquals(403,api.perform(delete("/api/v1/sessions/"+id).session(bob)
                 .header("X-CSRF-TOKEN",csrf(api,bob))).andReturn().getResponse().getStatus());
             assertEquals(200,api.perform(post("/api/v1/auth/logout").session(alice)

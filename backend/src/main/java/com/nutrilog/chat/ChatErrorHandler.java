@@ -15,6 +15,9 @@ public class ChatErrorHandler {
             case "SESSION_ACCESS_DENIED" -> "会话不存在或无权访问";
             case "SESSION_BUSY" -> "上一条消息仍在处理中";
             case "UNAUTHORIZED" -> "请先登录";
+            case "FOOD_NOT_FOUND" -> "选中的食品不存在";
+            case "FOOD_SELECTION_REQUIRED" -> "请先选择食品再确认重量";
+            case "INVALID_WEIGHT" -> "重量须大于0且不超过100000克，最多三位小数";
             case "INVALID_MESSAGE" -> "消息须为1至2000个字符，且不能全为空白";
             case "MODEL_UNAVAILABLE" -> "模型尚未配置，请启用live配置";
             case "MODEL_BUSY" -> "模型服务繁忙，请稍后重试";

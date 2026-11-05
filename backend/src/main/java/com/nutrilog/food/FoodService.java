@@ -33,8 +33,11 @@ public class FoodService {
         return foods.stream().filter(f -> f.id() == id).findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "食品不存在"));
     }
+    public static boolean isValidWeight(BigDecimal grams) {
+        return grams != null && grams.signum() > 0 && grams.compareTo(n("100000")) <= 0;
+    }
     public Calculation calculate(Long id, BigDecimal grams) {
-        if (id == null || grams == null || grams.signum() <= 0 || grams.compareTo(n("100000")) > 0)
+        if (id == null || !isValidWeight(grams))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "食品编号必填，重量须大于0且不超过100000克");
         Food food = get(id);
         Nutrients data = food.per100g();
