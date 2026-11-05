@@ -20,15 +20,15 @@ public class ChatService {
         return reply(message, trace, List.of());
     }
     public String reply(String message, RequestTrace trace, List<Turn> history) {
-        return reply(message, trace, history, null);
+        return replySession(message, trace, history, null).answer();
     }
-    public String reply(String message, RequestTrace trace, List<Turn> history, State state) {
+    public ChatGateway.SessionAnswer replySession(String message, RequestTrace trace, List<Turn> history, State state) {
         if (message == null || message.isBlank() || message.length() > 2000)
             throw new ChatFailure("INVALID_MESSAGE", 400);
         try {
-            String answer = gateway.answer(message.strip(), trace, history, state);
-            if (answer == null || answer.isBlank()) throw new ChatFailure("MODEL_EMPTY_RESPONSE", 502);
-            return answer;
+            var result = gateway.answerSession(message.strip(), trace, history, state);
+            if (result.answer() == null || result.answer().isBlank()) throw new ChatFailure("MODEL_EMPTY_RESPONSE", 502);
+            return result;
         } catch (ChatFailure known) { throw known; }
         catch (RuntimeException failure) {
             // 不返回或记录上游消息、用户输入、密钥和堆栈。

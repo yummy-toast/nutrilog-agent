@@ -7,6 +7,7 @@ import com.nutrilog.food.FoodService;
 import com.nutrilog.food.JsonFoodCatalog;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.MessageType;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.*;
 import java.util.List;
 import com.nutrilog.session.*;
@@ -32,7 +33,23 @@ class SessionSecurityTest {
         @Bean ChatModel model() {
             return prompt -> {
                 var messages = prompt.getInstructions();
+                if (messages.getLast() instanceof ToolResponseMessage) {
+                    if (messages.get(messages.size() - 3).getText().equals("搜索后超时"))
+                        throw new IllegalStateException(new java.net.SocketTimeoutException());
+                    return new ChatResponse(List.of(new Generation(
+                        AssistantMessage.builder().content("请确认食品").build())));
+                }
                 var input = messages.getLast().getText();
+                if (List.of("搜索米饭", "搜索后超时", "搜索不存在").contains(input)) {
+                    String keyword = switch (input) {
+                        case "搜索不存在" -> "不存在";
+                        default -> "米饭";
+                    };
+                    String arguments = JsonMapper.builder().build().writeValueAsString(java.util.Map.of("keyword", keyword));
+                    return new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("")
+                        .toolCalls(List.of(new AssistantMessage.ToolCall("search", "function", "searchFoods", arguments)))
+                        .build())));
+                }
                 if (input.equals("模拟超时"))
                     throw new IllegalStateException(new java.net.SocketTimeoutException());
                 String answer;
@@ -138,6 +155,22 @@ class SessionSecurityTest {
             assertEquals(169756L, changed.selectedFoodId());
             assertNull(changed.weightGrams());
             assertNull(changed.weightBasis());
+            var beforeSearchFailure = directory.snapshot("alice", sessionId);
+            assertEquals(504, send(api, alice, id, "搜索后超时").getStatus());
+            assertEquals(beforeSearchFailure, directory.snapshot("alice", sessionId));
+            assertEquals(200, send(api, alice, id, "搜索米饭").getStatus());
+            var candidates = directory.snapshot("alice", sessionId).state();
+            assertEquals(java.util.Set.of(169756L, 168935L), java.util.Set.copyOf(candidates.candidateFoodIds()));
+            assertNull(candidates.selectedFoodId());
+            assertNull(candidates.weightGrams());
+            assertEquals(200, send(api, alice, id, "搜索不存在").getStatus());
+            assertTrue(directory.snapshot("alice", sessionId).state().candidateFoodIds().isEmpty());
+            assertEquals(200, send(api, alice, id, "搜索米饭").getStatus());
+            assertEquals(200, send(api, alice, id, java.util.Map.of("message", "确认熟米饭",
+                "selectedFoodId", 168935, "weightGrams", 200)).getStatus());
+            var confirmed = directory.snapshot("alice", sessionId).state();
+            assertEquals(168935L, confirmed.selectedFoodId());
+            assertTrue(confirmed.candidateFoodIds().isEmpty());
             assertEquals(403,api.perform(delete("/api/v1/sessions/"+id).session(bob)
                 .header("X-CSRF-TOKEN",csrf(api,bob))).andReturn().getResponse().getStatus());
             assertEquals(200,api.perform(post("/api/v1/auth/logout").session(alice)

@@ -4,6 +4,7 @@ import com.nutrilog.food.FoodService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -11,11 +12,22 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 public class FoodAgentTools {
     protected final FoodService service;
-    public FoodAgentTools(FoodService service) { this.service = service; }
+    private final Consumer<List<FoodService.Food>> onSearch;
+    @org.springframework.beans.factory.annotation.Autowired
+    public FoodAgentTools(FoodService service) { this(service, foods -> {}); }
+    private FoodAgentTools(FoodService service, Consumer<List<FoodService.Food>> onSearch) {
+        this.service = service;
+        this.onSearch = onSearch;
+    }
+    public FoodAgentTools observingSearch(Consumer<List<FoodService.Food>> observer) {
+        return new FoodAgentTools(service, observer);
+    }
     public record Result<T>(String status, T data, String message) {}
     @Tool(description = "按食品关键词搜索候选。保留生熟、加盐等限定；多个候选时向用户澄清，不得擅自选择。无候选不得编造食品。")
     public Result<List<FoodService.Food>> searchFoods(String keyword) {
-        return execute(() -> service.search(keyword));
+        var result = execute(() -> service.search(keyword));
+        if (result.data() != null) onSearch.accept(result.data());
+        return result;
     }
     @Tool(description = "按已选定的食品编号和可食部克重计算营养。仅使用用户选定或搜索确认的编号；缺重量先追问。MISSING表示未知，不得说成0。返回来源，不得自行改写数值。")
     public Result<FoodService.Calculation> calculateFoodNutrition(Long foodId, BigDecimal weightGrams) {

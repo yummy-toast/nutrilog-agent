@@ -38,8 +38,15 @@ public class SessionChatController {
         try {
             var completed = directory.executeTurn(principal.getName(), id, message.strip(), snapshot -> {
                 State state = updateSelection(snapshot.state(), request);
-                String answer = chat.reply(message, trace, recentHistory(snapshot.turns()), state);
-                return new SessionDirectory.CompletedTurn(answer, state);
+                var result = chat.replySession(message, trace, recentHistory(snapshot.turns()), state);
+                if (request.selectedFoodId() == null && result.searchCandidates().isPresent()) {
+                    var candidates = result.searchCandidates().orElseThrow();
+                    boolean stillSelected = state.selectedFoodId() != null
+                        && candidates.equals(List.of(state.selectedFoodId()));
+                    state = new State(candidates, stillSelected ? state.selectedFoodId() : null,
+                        stillSelected ? state.weightGrams() : null, stillSelected ? state.weightBasis() : null);
+                }
+                return new SessionDirectory.CompletedTurn(result.answer(), state);
             });
             return new ChatController.Response("OK", completed.answer(), trace.id());
         } catch (ResponseStatusException error) {
