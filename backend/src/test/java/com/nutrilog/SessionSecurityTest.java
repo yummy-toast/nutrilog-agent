@@ -1,6 +1,14 @@
 package com.nutrilog;
 
 import com.nutrilog.auth.*;
+import com.nutrilog.chat.*;
+import com.nutrilog.agent.FoodAgentTools;
+import com.nutrilog.food.FoodService;
+import com.nutrilog.food.JsonFoodCatalog;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.MessageType;
+import org.springframework.ai.chat.model.*;
+import java.util.List;
 import com.nutrilog.session.*;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.Test;
@@ -17,8 +25,38 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SessionSecurityTest {
     @Configuration @EnableWebSecurity @EnableWebMvc
-    @Import({SecurityConfiguration.class,AuthController.class,SessionDirectory.class,SessionController.class,SessionErrorHandler.class})
-    static class Config {}
+    @Import({SecurityConfiguration.class,AuthController.class,SessionDirectory.class,SessionController.class,SessionErrorHandler.class,SessionChatController.class,ChatService.class,SpringAiChatGateway.class,ChatErrorHandler.class,ChatTraceConfiguration.class})
+    static class Config {
+        @Bean FoodAgentTools foodTools() { return new FoodAgentTools(new FoodService(new JsonFoodCatalog())); }
+        @Bean ChatModel model() {
+            return prompt -> {
+                var messages = prompt.getInstructions();
+                var input = messages.getLast().getText();
+                if (input.equals("模拟超时"))
+                    throw new IllegalStateException(new java.net.SocketTimeoutException());
+                String answer;
+                if (input.equals("200克呢？")) {
+                    assertEquals(4, messages.size());
+                    assertEquals(MessageType.USER, messages.get(1).getMessageType());
+                    assertEquals("查熟米饭", messages.get(1).getText());
+                    assertEquals(MessageType.ASSISTANT, messages.get(2).getMessageType());
+                    assertEquals("请提供重量", messages.get(2).getText());
+                    answer = "熟米饭200克";
+                } else {
+                    assertEquals("查熟米饭", input);
+                    assertEquals(2, messages.size());
+                    answer = "请提供重量";
+                }
+                return new ChatResponse(List.of(new Generation(AssistantMessage.builder().content(answer).build())));
+            };
+        }
+    }
+    private MockHttpServletResponse send(MockMvc api, MockHttpSession session, String id, String input) throws Exception {
+        return api.perform(post("/api/v1/sessions/"+id+"/messages").session(session)
+            .header("X-CSRF-TOKEN",csrf(api,session)).contentType("application/json")
+            .content(JsonMapper.builder().build().writeValueAsString(java.util.Map.of("message", input))))
+            .andReturn().getResponse();
+    }
     private MockHttpSession login(MockMvc api, String user, String password) throws Exception {
         var csrf=api.perform(get("/api/v1/auth/csrf")).andReturn();
         var session=(MockHttpSession)csrf.getRequest().getSession(false);
@@ -57,6 +95,17 @@ class SessionSecurityTest {
             assertTrue(JsonMapper.builder().build().readTree(history.getContentAsString()).get("turns").isEmpty());
             assertEquals(403, api.perform(get("/api/v1/sessions/"+id+"/history").session(bob))
                 .andReturn().getResponse().getStatus());
+            assertEquals(403, send(api, bob, id, "越权请求").getStatus());
+            assertEquals(200, send(api, alice, id, "查熟米饭").getStatus());
+            var followup = send(api, alice, id, "200克呢？");
+            assertEquals(200, followup.getStatus());
+            var reply = JsonMapper.builder().build().readTree(followup.getContentAsByteArray());
+            assertEquals("熟米饭200克", reply.get("answer").asString());
+            assertEquals(followup.getHeader("X-Request-Id"), reply.get("requestId").asString());
+            assertEquals(504, send(api, alice, id, "模拟超时").getStatus());
+            var committed = api.perform(get("/api/v1/sessions/"+id+"/history").session(alice))
+                .andReturn().getResponse();
+            assertEquals(2, JsonMapper.builder().build().readTree(committed.getContentAsByteArray()).get("turns").size());
             assertEquals(403,api.perform(delete("/api/v1/sessions/"+id).session(bob)
                 .header("X-CSRF-TOKEN",csrf(api,bob))).andReturn().getResponse().getStatus());
             assertEquals(200,api.perform(post("/api/v1/auth/logout").session(alice)

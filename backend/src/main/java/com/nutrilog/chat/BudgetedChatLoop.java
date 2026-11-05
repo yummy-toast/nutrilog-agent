@@ -1,6 +1,7 @@
 package com.nutrilog.chat;
 
 import java.util.*;
+import com.nutrilog.session.SessionDirectory.Turn;
 import java.util.concurrent.*;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.ChatModel;
@@ -23,10 +24,27 @@ public final class BudgetedChatLoop implements AutoCloseable {
     String run(ChatModel model, List<ToolCallback> callbacks, String system, String input, ExecutionBudget budget) {
         return run(model, callbacks, system, input, budget, new RequestTrace());
     }
-    private String run(ChatModel model, List<ToolCallback> callbacks, String system, String input, ExecutionBudget budget, RequestTrace trace) {
+    public String run(ChatModel model, List<ToolCallback> callbacks, String system, String input,
+                      RequestTrace trace, List<Turn> history) {
+        return run(model, callbacks, system, input, new ExecutionBudget(), trace, history);
+    }
+
+    private String run(ChatModel model, List<ToolCallback> callbacks, String system, String input,
+                       ExecutionBudget budget, RequestTrace trace) {
+        return run(model, callbacks, system, input, budget, trace, List.of());
+    }
+
+    private String run(ChatModel model, List<ToolCallback> callbacks, String system, String input,
+                       ExecutionBudget budget, RequestTrace trace, List<Turn> history) {
         var allowed = new HashMap<String, ToolCallback>();
         callbacks.forEach(c -> allowed.put(c.getToolDefinition().name(), c));
-        var messages = new ArrayList<Message>(List.of(new SystemMessage(system), new UserMessage(input)));
+        var messages = new ArrayList<Message>();
+        messages.add(new SystemMessage(system));
+        for (Turn turn : history) {
+            messages.add(new UserMessage(turn.message()));
+            messages.add(AssistantMessage.builder().content(turn.answer()).build());
+        }
+        messages.add(new UserMessage(input));
         while (true) {
             var timeout = budget.beforeModel();
             var base = model.getDefaultOptions();

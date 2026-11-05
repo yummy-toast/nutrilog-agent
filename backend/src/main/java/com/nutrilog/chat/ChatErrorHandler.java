@@ -4,7 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.*;
 
-@RestControllerAdvice(assignableTypes = ChatController.class)
+@RestControllerAdvice(assignableTypes = {ChatController.class, SessionChatController.class})
 public class ChatErrorHandler {
     public record Error(String code, String message, String requestId) {}
     @ExceptionHandler(ChatFailure.class)
@@ -12,6 +12,9 @@ public class ChatErrorHandler {
         var trace = RequestTrace.from(request);
         trace.failure(failure.code());
         String message = switch (failure.code()) {
+            case "SESSION_ACCESS_DENIED" -> "会话不存在或无权访问";
+            case "SESSION_BUSY" -> "上一条消息仍在处理中";
+            case "UNAUTHORIZED" -> "请先登录";
             case "INVALID_MESSAGE" -> "消息须为1至2000个字符，且不能全为空白";
             case "MODEL_UNAVAILABLE" -> "模型尚未配置，请启用live配置";
             case "MODEL_BUSY" -> "模型服务繁忙，请稍后重试";

@@ -1,6 +1,8 @@
 package com.nutrilog.chat;
 
 import java.net.SocketTimeoutException;
+import java.util.List;
+import com.nutrilog.session.SessionDirectory.Turn;
 import java.net.http.HttpTimeoutException;
 import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
@@ -14,10 +16,13 @@ public class ChatService {
     public ChatService(ChatGateway gateway) { this.gateway = gateway; }
     public String reply(String message) { return reply(message, new RequestTrace()); }
     public String reply(String message, RequestTrace trace) {
+        return reply(message, trace, List.of());
+    }
+    public String reply(String message, RequestTrace trace, List<Turn> history) {
         if (message == null || message.isBlank() || message.length() > 2000)
             throw new ChatFailure("INVALID_MESSAGE", 400);
         try {
-            String answer = gateway.answer(message.strip(), trace);
+            String answer = gateway.answer(message.strip(), trace, history);
             if (answer == null || answer.isBlank()) throw new ChatFailure("MODEL_EMPTY_RESPONSE", 502);
             return answer;
         } catch (ChatFailure known) { throw known; }

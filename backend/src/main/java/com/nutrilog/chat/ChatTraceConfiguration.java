@@ -4,6 +4,6 @@ import org.springframework.web.servlet.config.annotation.*;
 @Configuration
 public class ChatTraceConfiguration implements WebMvcConfigurer {
     @Override public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new ChatTraceInterceptor()).addPathPatterns("/api/v1/chat");
+        registry.addInterceptor(new ChatTraceInterceptor()).addPathPatterns("/api/v1/chat", "/api/v1/sessions/{id}/messages");
     }
 }
