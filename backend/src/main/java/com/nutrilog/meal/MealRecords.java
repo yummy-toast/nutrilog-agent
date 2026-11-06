@@ -7,6 +7,9 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.*;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -23,6 +26,11 @@ public class MealRecords {
     public record Details(LocalDate date, MealType mealType, FoodService.Calculation nutrition) {}
     public record View(UUID operationId, UUID recordId, String status, Instant expiresAt,
                        Instant confirmedAt, Details details) {}
+
+    public record Total(String status, BigDecimal amount, BigDecimal knownSubtotal, String unit,
+                        int knownCount, int missingCount) {}
+    public record Totals(Total energy, Total protein, Total fat, Total carbohydrate) {}
+    public record Day(LocalDate date, List<View> records, Totals totals) {}
 
     private final String url;
     private final FoodService foods;
@@ -104,6 +112,54 @@ public class MealRecords {
         } catch (SQLException error) {
             throw unavailable();
         }
+    }
+
+    public Day daily(String owner, LocalDate date) {
+        if (date == null || date.isAfter(LocalDate.now(clock)))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "查询日期无效");
+
+        var records = new ArrayList<View>();
+        try (var connection = open(); var statement = connection.prepareStatement("""
+            SELECT operation_id, expires_at, confirmed_at, details
+            FROM meal_operation
+            WHERE owner_name = ? AND confirmed_at IS NOT NULL
+            ORDER BY confirmed_at, operation_id
+            """)) {
+            statement.setString(1, owner);
+            try (var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    var details = json.readValue(rows.getString(4), Details.class);
+                    if (!details.date().equals(date)) continue;
+                    var id = UUID.fromString(rows.getString(1));
+                    records.add(new View(id, id, "CONFIRMED", Instant.ofEpochMilli(rows.getLong(2)),
+                        Instant.ofEpochMilli(rows.getLong(3)), details));
+                }
+            }
+        } catch (SQLException error) {
+            throw unavailable();
+        }
+        var totals = new Totals(sum(records, FoodService.Calculation::energy, "kcal"),
+            sum(records, FoodService.Calculation::protein, "g"),
+            sum(records, FoodService.Calculation::fat, "g"),
+            sum(records, FoodService.Calculation::carbohydrate, "g"));
+        return new Day(date, List.copyOf(records), totals);
+    }
+
+    private Total sum(List<View> records, Function<FoodService.Calculation, FoodService.Value> field, String unit) {
+        BigDecimal knownSum = BigDecimal.ZERO;
+        int known = 0;
+        for (View record : records) {
+            var value = field.apply(record.details().nutrition());
+            if (value.amount() != null && "KNOWN".equals(value.status())) {
+                knownSum = knownSum.add(value.amount());
+                known++;
+            }
+        }
+        int missing = records.size() - known;
+        if (records.isEmpty()) return new Total("NO_RECORDS", null, null, unit, 0, 0);
+        if (missing == 0) return new Total("COMPLETE", knownSum, knownSum, unit, known, 0);
+        if (known == 0) return new Total("MISSING", null, null, unit, 0, missing);
+        return new Total("PARTIAL", null, knownSum, unit, known, missing);
     }
 
     private View read(Connection connection, String owner, UUID id) throws SQLException {

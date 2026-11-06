@@ -78,4 +78,49 @@ class MealRecordsTest {
             new MealRecords.PreviewRequest(999L, request.weightGrams(), request.date(), request.mealType())))
             .getStatusCode().value());
     }
+
+    @Test void dailyUsesOnlyOwnersConfirmedSnapshotsForTheMealDate() {
+        var catalog = new JsonFoodCatalog().all();
+        var source = catalog.getFirst().source();
+        var complete = new FoodService.Food(1L, "完整食品", "COOKED", java.util.List.of(),
+            new FoodService.Nutrients(new BigDecimal("100"), new BigDecimal("10"), BigDecimal.ZERO,
+                new BigDecimal("20")), source);
+        var incomplete = new FoodService.Food(2L, "缺项食品", "COOKED", java.util.List.of(),
+            new FoodService.Nutrients(new BigDecimal("50"), null, BigDecimal.ZERO, null), source);
+        var foods = new FoodService(() -> java.util.List.of(complete, incomplete));
+        String url = "jdbc:h2:file:" + data.resolve("daily");
+        var writer = new MealRecords(url, foods, Clock.fixed(now, zone));
+        LocalDate day = request().date().minusDays(1);
+        var first = new MealRecords.PreviewRequest(1L, new BigDecimal("100"), day, MealRecords.MealType.LUNCH);
+        var second = new MealRecords.PreviewRequest(2L, new BigDecimal("100"), day, MealRecords.MealType.DINNER);
+
+        var a = writer.preview("alice", first);
+        writer.confirm("alice", a.operationId());
+        writer.confirm("alice", a.operationId());
+        writer.confirm("alice", writer.preview("alice", second).operationId());
+        writer.preview("alice", first);
+        writer.confirm("bob", writer.preview("bob", first).operationId());
+        writer.confirm("alice", writer.preview("alice", requestWithDate(first, day.minusDays(1))).operationId());
+
+        var reader = new MealRecords(url, new FoodService(java.util.List::of), Clock.fixed(now, zone));
+        var report = reader.daily("alice", day);
+        assertEquals(2, report.records().size());
+        assertTrue(report.records().stream().allMatch(row -> row.details().date().equals(day)));
+        assertEquals(new MealRecords.Total("COMPLETE", new BigDecimal("150.00"), new BigDecimal("150.00"),
+            "kcal", 2, 0), report.totals().energy());
+        assertEquals(new MealRecords.Total("PARTIAL", null, new BigDecimal("10.00"), "g", 1, 1),
+            report.totals().protein());
+        assertEquals(new BigDecimal("0.00"), report.totals().fat().amount());
+        assertEquals("PARTIAL", report.totals().carbohydrate().status());
+        assertEquals(1, reader.daily("bob", day).records().size());
+        assertEquals("NO_RECORDS", reader.daily("alice", day.plusDays(1)).totals().energy().status());
+
+        writer.confirm("alice", writer.preview("alice", requestWithDate(second, day.minusDays(2))).operationId());
+        assertEquals(new MealRecords.Total("MISSING", null, null, "g", 0, 1),
+            reader.daily("alice", day.minusDays(2)).totals().protein());
+    }
+
+    private MealRecords.PreviewRequest requestWithDate(MealRecords.PreviewRequest request, LocalDate date) {
+        return new MealRecords.PreviewRequest(request.foodId(), request.weightGrams(), date, request.mealType());
+    }
 }

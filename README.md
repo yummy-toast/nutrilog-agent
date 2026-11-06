@@ -100,3 +100,11 @@ Spring Security服务端登录与内存会话目录已接入，只有demo-auth�
 预览返回 PENDING、operationId、有效期及服务端计算的营养快照，有效期为十分钟。用户确认时提交 `POST /api/v1/meals/previews/{operationId}/confirm`。确认通过数据库条件更新把同一行转为 CONFIRMED，此时才有 recordId。重复确认返回第一次的结果，包括原确认时间与快照。待确认预览过期后返回 410 PREVIEW_EXPIRED。他人和不存在的编号均返回 404。可通过 `GET /api/v1/meals/previews/{operationId}` 核对状态。
 
 记餐使用本地 H2 文件库。记录纠正、每日统计和前端仍在后续阶段。46 项 Java 测试通过，覆盖并发幂等、预览过期、跨用户隔离和文件库重开。打包应用的实际 HTTP 检查覆盖登录、CSRF、预览、确认及重启后重复确认。
+
+## 每日记餐查询（2026-11-06）
+
+使用 local-db 配置。登录后调用 `GET /api/v1/meals/daily?date=2026-11-06`。日期为实际用餐日期，使用 YYYY-MM-DD。响应返回本人当天已确认的 records，以及 totals 中的热量、蛋白质、脂肪、碳水。
+
+各营养项单独标记完整性。COMPLETE 提供完整 amount，PARTIAL 只提供 knownSubtotal，MISSING 表示该项全部缺失，NO_RECORDS 表示当天没有已确认记录。knownCount 和 missingCount 给出覆盖情况。求和使用每条记录已经保存的两位小数快照，已知零计为零。当前由数据库筛选本人已确认的记录，应用按用餐日期筛选快照。
+
+47 项 Java 测试及实际 HTTP 检查通过，覆盖日期、重复确认去重、待确认预览排除、跨用户隔离和营养缺项。
