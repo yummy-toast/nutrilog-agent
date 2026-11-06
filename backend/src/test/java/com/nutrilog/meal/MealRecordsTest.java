@@ -123,4 +123,79 @@ class MealRecordsTest {
     private MealRecords.PreviewRequest requestWithDate(MealRecords.PreviewRequest request, LocalDate date) {
         return new MealRecords.PreviewRequest(request.foodId(), request.weightGrams(), date, request.mealType());
     }
+
+    @Test void correctionPreservesSnapshotAndRejectsStaleConfirmations() {
+        var initial = records(now);
+        var original = initial.confirm("alice", initial.preview("alice", request()).operationId());
+        String url = "jdbc:h2:file:" + data.resolve("meals");
+        var service = new MealRecords(url, new FoodService(java.util.List::of), Clock.fixed(now.plusSeconds(1), zone));
+        var correction = new MealRecords.CorrectionRequest(1L, null, new BigDecimal("100"), null, null, null);
+        assertEquals(404, assertThrows(ResponseStatusException.class,
+            () -> service.correction("bob", original.recordId(), correction)).getStatusCode().value());
+        var first = service.correction("alice", original.recordId(), correction);
+        var stale = service.correction("alice", original.recordId(),
+            new MealRecords.CorrectionRequest(1L, null, null, null, null, "旧预览"));
+        assertEquals(new BigDecimal("260.00"), service.daily("alice", request().date()).totals().energy().amount());
+        var applied = service.confirm("alice", first.operationId());
+        assertEquals(2L, applied.version());
+        assertEquals(original.recordId(), applied.recordId());
+        assertEquals(new BigDecimal("130.00"), applied.details().nutrition().energy().amount());
+        assertEquals(original.details().nutrition().source(), applied.details().nutrition().source());
+        assertEquals(applied, service.confirm("alice", first.operationId()));
+        assertEquals(original, service.confirm("alice", original.operationId()));
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+            () -> service.confirm("alice", stale.operationId())).getStatusCode().value());
+        assertEquals("PENDING", service.get("alice", stale.operationId()).status());
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+            () -> service.correction("alice", original.recordId(), correction)).getStatusCode().value());
+
+        var moved = service.correction("alice", original.recordId(), new MealRecords.CorrectionRequest(2L, null,
+            null, request().date().minusDays(1), MealRecords.MealType.DINNER, "补充备注"));
+        service.confirm("alice", moved.operationId());
+        assertTrue(service.daily("alice", request().date()).records().isEmpty());
+        var day = service.daily("alice", request().date().minusDays(1));
+        assertEquals(1, day.records().size());
+        assertEquals(3L, day.records().getFirst().version());
+        assertEquals("补充备注", day.records().getFirst().details().note());
+        assertEquals(applied.details().nutrition(), day.records().getFirst().details().nutrition());
+        assertEquals(applied, service.confirm("alice", first.operationId()));
+    }
+
+    @Test void legacyRowsCanBeEditedWithoutInventingPer100gValues() throws Exception {
+        var foods = new FoodService(new JsonFoodCatalog());
+        String url = "jdbc:h2:file:" + data.resolve("legacy");
+        var id = java.util.UUID.randomUUID();
+        var json = tools.jackson.databind.json.JsonMapper.builder().build();
+        var payload = json.writeValueAsString(java.util.Map.of("date", request().date(),
+            "mealType", request().mealType(), "nutrition", foods.calculate(168935L, new BigDecimal("200"))));
+        try (var connection = java.sql.DriverManager.getConnection(url, "sa", "");
+             var ddl = connection.createStatement()) {
+            ddl.execute("""
+                CREATE TABLE meal_operation (
+                    operation_id VARCHAR(36) PRIMARY KEY, owner_name VARCHAR(255) NOT NULL,
+                    expires_at BIGINT NOT NULL, confirmed_at BIGINT, details CLOB NOT NULL
+                )
+                """);
+            try (var insert = connection.prepareStatement("INSERT INTO meal_operation VALUES (?, ?, ?, ?, ?)")) {
+                insert.setString(1, id.toString());
+                insert.setString(2, "alice");
+                insert.setLong(3, now.plusSeconds(600).toEpochMilli());
+                insert.setLong(4, now.toEpochMilli());
+                insert.setString(5, payload);
+                insert.executeUpdate();
+            }
+        }
+        var service = new MealRecords(url, foods, Clock.fixed(now, zone));
+        assertEquals(1L, service.daily("alice", request().date()).records().getFirst().version());
+        assertEquals(422, assertThrows(ResponseStatusException.class, () -> service.correction("alice", id,
+            new MealRecords.CorrectionRequest(1L, null, BigDecimal.TEN, null, null, null))).getStatusCode().value());
+        var note = service.correction("alice", id,
+            new MealRecords.CorrectionRequest(1L, null, null, null, null, "旧记录备注"));
+        assertNull(note.details().per100g());
+        assertEquals("旧记录备注", service.confirm("alice", note.operationId()).details().note());
+        var replacement = service.correction("alice", id,
+            new MealRecords.CorrectionRequest(2L, 171287L, new BigDecimal("100"), null, null, null));
+        assertNotNull(replacement.details().per100g());
+        assertEquals(171287L, service.confirm("alice", replacement.operationId()).details().nutrition().foodId());
+    }
 }

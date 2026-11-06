@@ -97,9 +97,9 @@ Spring Security服务端登录与内存会话目录已接入，只有demo-auth�
 
 使用 demo-auth,local-db 配置启动。登录后，带 Cookie 和 CSRF 头提交 `POST /api/v1/meals/previews`，请求示例为 `{"foodId":168935,"weightGrams":200,"date":"2026-11-06","mealType":"LUNCH"}`。餐次支持 BREAKFAST、LUNCH、DINNER、SNACK，日期按 Asia/Shanghai 判断，不接受未来日期。
 
-预览返回 PENDING、operationId、有效期及服务端计算的营养快照，有效期为十分钟。用户确认时提交 `POST /api/v1/meals/previews/{operationId}/confirm`。确认通过数据库条件更新把同一行转为 CONFIRMED，此时才有 recordId。重复确认返回第一次的结果，包括原确认时间与快照。待确认预览过期后返回 410 PREVIEW_EXPIRED。他人和不存在的编号均返回 404。可通过 `GET /api/v1/meals/previews/{operationId}` 核对状态。
+预览返回 PENDING、operationId、有效期及服务端计算的营养快照，有效期为十分钟。用户确认时提交 `POST /api/v1/meals/previews/{operationId}/confirm`。确认在数据库事务中把同一行转为 CONFIRMED，此时才有 recordId。重复确认返回第一次的结果，包括原确认时间与快照。待确认预览过期后返回 410 PREVIEW_EXPIRED。他人和不存在的编号均返回 404。可通过 `GET /api/v1/meals/previews/{operationId}` 核对状态。
 
-记餐使用本地 H2 文件库。记录纠正、每日统计和前端仍在后续阶段。46 项 Java 测试通过，覆盖并发幂等、预览过期、跨用户隔离和文件库重开。打包应用的实际 HTTP 检查覆盖登录、CSRF、预览、确认及重启后重复确认。
+记餐使用本地 H2 文件库。每日统计和记录纠正见下方。46 项 Java 测试通过，覆盖并发幂等、预览过期、跨用户隔离和文件库重开。打包应用的实际 HTTP 检查覆盖登录、CSRF、预览、确认及重启后重复确认。
 
 ## 每日记餐查询（2026-11-06）
 
@@ -108,3 +108,13 @@ Spring Security服务端登录与内存会话目录已接入，只有demo-auth�
 各营养项单独标记完整性。COMPLETE 提供完整 amount，PARTIAL 只提供 knownSubtotal，MISSING 表示该项全部缺失，NO_RECORDS 表示当天没有已确认记录。knownCount 和 missingCount 给出覆盖情况。求和使用每条记录已经保存的两位小数快照，已知零计为零。当前由数据库筛选本人已确认的记录，应用按用餐日期筛选快照。
 
 47 项 Java 测试及实际 HTTP 检查通过，覆盖日期、重复确认去重、待确认预览排除、跨用户隔离和营养缺项。
+
+## 已确认记餐的纠正（2026-11-06）
+
+从每日查询读取当前 recordId 和 version。向 `POST /api/v1/meals/records/{recordId}/correction-previews` 提交 expectedVersion 和要修改的字段，例如 `{"expectedVersion":1,"weightGrams":100}`。可修改 foodId、weightGrams、date、mealType、note。更换食品须提供新重量，空字符串可清除备注。
+
+调用同一个确认接口确认纠正预览。数据库事务锁定预览，检查记录版本并更新原记录，再将预览标为已确认。旧版本返回 409 RECORD_CONFLICT，需要刷新并重新预览。重复确认返回该操作首次结果，每日查询返回记录的最新版本。纠正操作本身不会计入日报。
+
+新预览保存每百克营养数据。同食品修改重量使用原数据，更换食品使用新条目，只改备注、日期或餐次保留计算结果。启动时给已有本地数据库补列。旧快照缺少每百克原值时，改变原食品重量返回 422 NUTRITION_SNAPSHOT_UNAVAILABLE，仍可修改元数据，或选择另一食品并确认新的营养快照。
+
+49 项 Java 测试通过，包含旧库升级、快照重算、旧版本冲突和重试。打包应用通过纠正预览、确认及日报只计一条记录的 HTTP 检查。

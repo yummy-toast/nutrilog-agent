@@ -38,6 +38,13 @@ public class MealController {
         return records.confirm(principal.getName(), id);
     }
 
+    @PostMapping("/records/{id}/correction-previews")
+    @ResponseStatus(HttpStatus.CREATED)
+    public MealRecords.View correction(Principal principal, @PathVariable UUID id,
+                                       @RequestBody MealRecords.CorrectionRequest request) {
+        return records.correction(principal.getName(), id, request);
+    }
+
     @GetMapping("/daily")
     public MealRecords.Day daily(Principal principal,
                                  @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -48,6 +55,8 @@ public class MealController {
     public ResponseEntity<Map<String, String>> handle(ResponseStatusException error) {
         String code = switch (error.getStatusCode().value()) {
             case 404 -> "NOT_FOUND";
+            case 409 -> "RECORD_CONFLICT";
+            case 422 -> "NUTRITION_SNAPSHOT_UNAVAILABLE";
             case 410 -> "PREVIEW_EXPIRED";
             case 503 -> "MEAL_STORAGE_UNAVAILABLE";
             default -> "INVALID_REQUEST";

@@ -41,9 +41,16 @@ public class FoodService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "食品编号必填，重量须大于0且不超过100000克");
         Food food = get(id);
         Nutrients data = food.per100g();
-        return new Calculation(food.id(), food.name(), food.state(), grams,
+        return fromSnapshot(food.id(), food.name(), food.state(), food.source(), data, grams);
+    }
+    public Calculation recalculate(Calculation previous, Nutrients per100g, BigDecimal grams) {
+        if (!isValidWeight(grams)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "重量无效");
+        return fromSnapshot(previous.foodId(), previous.name(), previous.state(), previous.source(), per100g, grams);
+    }
+    private Calculation fromSnapshot(long id, String name, String state, Source source, Nutrients data, BigDecimal grams) {
+        return new Calculation(id, name, state, grams,
             scale(data.energyKcal(), grams, "kcal"), scale(data.proteinGrams(), grams, "g"),
-            scale(data.fatGrams(), grams, "g"), scale(data.carbohydrateGrams(), grams, "g"), food.source());
+            scale(data.fatGrams(), grams, "g"), scale(data.carbohydrateGrams(), grams, "g"), source);
     }
     private Value scale(BigDecimal base, BigDecimal grams, String unit) {
         return base == null ? new Value(null, unit, "MISSING")
