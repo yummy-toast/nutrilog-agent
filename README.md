@@ -92,3 +92,11 @@ bash scripts/live-smoke.sh
 Spring Security服务端登录与内存会话目录已接入，只有demo-auth配置启用教学用户。登录/退出及会话写操作需要CSRF令牌；会话owner从已验证Principal获取，客户端userId无效。可创建、列出、查看和删除本人会话；没有消息历史或多轮聊天。
 
 39项Java测试及真实HTTP双用户隔离、退出失效、默认账号禁用检查通过。运行方式和公开演示口令见[身份与会话说明](docs/session-ownership.md)。此阶段仅供本机演示，不是持久化账号系统。
+
+## 记餐预览与确认（2026-11-06）
+
+使用 demo-auth,local-db 配置启动。登录后，带 Cookie 和 CSRF 头提交 `POST /api/v1/meals/previews`，请求示例为 `{"foodId":168935,"weightGrams":200,"date":"2026-11-06","mealType":"LUNCH"}`。餐次支持 BREAKFAST、LUNCH、DINNER、SNACK，日期按 Asia/Shanghai 判断，不接受未来日期。
+
+预览返回 PENDING、operationId、有效期及服务端计算的营养快照，有效期为十分钟。用户确认时提交 `POST /api/v1/meals/previews/{operationId}/confirm`。确认通过数据库条件更新把同一行转为 CONFIRMED，此时才有 recordId。重复确认返回第一次的结果，包括原确认时间与快照。待确认预览过期后返回 410 PREVIEW_EXPIRED。他人和不存在的编号均返回 404。可通过 `GET /api/v1/meals/previews/{operationId}` 核对状态。
+
+记餐使用本地 H2 文件库。记录纠正、每日统计和前端仍在后续阶段。46 项 Java 测试通过，覆盖并发幂等、预览过期、跨用户隔离和文件库重开。打包应用的实际 HTTP 检查覆盖登录、CSRF、预览、确认及重启后重复确认。
