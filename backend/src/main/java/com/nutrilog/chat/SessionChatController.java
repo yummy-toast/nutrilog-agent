@@ -51,6 +51,7 @@ public class SessionChatController {
             return new ChatController.Response("OK", completed.answer(), trace.id());
         } catch (ResponseStatusException error) {
             int status = error.getStatusCode().value();
+            if (status == 503) throw new ChatFailure("SESSION_STORAGE_UNAVAILABLE", 503);
             if (status == 409) throw new ChatFailure("SESSION_BUSY", 409);
             if (status == 403) throw new ChatFailure("SESSION_ACCESS_DENIED", 403);
             throw error;

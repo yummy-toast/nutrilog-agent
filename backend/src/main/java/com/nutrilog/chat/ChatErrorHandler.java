@@ -13,6 +13,7 @@ public class ChatErrorHandler {
         trace.failure(failure.code());
         String message = switch (failure.code()) {
             case "SESSION_ACCESS_DENIED" -> "会话不存在或无权访问";
+            case "SESSION_STORAGE_UNAVAILABLE" -> "会话存储暂不可用，请稍后重试";
             case "SESSION_BUSY" -> "上一条消息仍在处理中";
             case "UNAUTHORIZED" -> "请先登录";
             case "FOOD_NOT_FOUND" -> "选中的食品不存在";

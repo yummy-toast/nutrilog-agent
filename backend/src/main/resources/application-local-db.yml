@@ -1,0 +1,3 @@
+nutrilog:
+  session:
+    jdbc-url: "jdbc:h2:file:./.data/nutrilog"

@@ -1,6 +1,10 @@
 package com.nutrilog.session;
 
 import java.time.Instant;
+import java.sql.SQLException;
+import jakarta.annotation.PreDestroy;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import java.math.BigDecimal;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -10,9 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-/** 单进程内存会话目录。每次只发布完整的已提交快照。 */
+/** 单进程会话目录。启用文件库时先提交数据库，再发布内存快照。 */
 @Service
-public class SessionDirectory {
+public class SessionDirectory implements AutoCloseable {
     private static final class Entry {
         private final String owner;
         private final View view;
@@ -45,12 +49,42 @@ public class SessionDirectory {
     }
     public record View(UUID sessionId, String title, Instant createdAt) {}
     private final ConcurrentHashMap<UUID,Entry> entries = new ConcurrentHashMap<>();
+    private final SessionDatabase database;
+
+    public SessionDirectory() { this(""); }
+
+    @Autowired
+    public SessionDirectory(@Value("${nutrilog.session.jdbc-url:}") String url) {
+        if (url.isBlank()) {
+            database = null;
+            return;
+        }
+        SessionDatabase opened = null;
+        try {
+            opened = new SessionDatabase(url);
+            for (var saved : opened.load()) {
+                var entry = new Entry(saved.owner(), saved.view());
+                entry.snapshot = saved.snapshot();
+                entries.put(saved.view().sessionId(), entry);
+            }
+            database = opened;
+        } catch (SQLException | RuntimeException error) {
+            if (opened != null) {
+                try { opened.close(); } catch (SQLException closing) { error.addSuppressed(closing); }
+            }
+            throw new IllegalStateException("无法加载会话数据库", error);
+        }
+    }
+
     public View create(String owner, String title) {
         if (owner == null || owner.isBlank()) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         if (title == null || title.isBlank() || title.length() > 100)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"标题须为1至100个字符");
         var view = new View(UUID.randomUUID(),title.strip(),Instant.now());
-        entries.put(view.sessionId(),new Entry(owner,view)); return view;
+        var entry = new Entry(owner, view);
+        if (database != null) database.insert(owner, view, entry.snapshot);
+        entries.put(view.sessionId(), entry);
+        return view;
     }
     private Entry requireOwned(String owner, UUID id) {
         var entry = entries.get(id);
@@ -75,7 +109,9 @@ public class SessionDirectory {
             CompletedTurn completed = execute.apply(previous);
             var turns = new ArrayList<>(previous.turns());
             turns.add(new Turn(message, completed.answer()));
-            entry.snapshot = new Snapshot(turns, completed.state());
+            var next = new Snapshot(turns, completed.state());
+            if (database != null) database.update(id, owner, next);
+            entry.snapshot = next;
             return completed;
         } finally {
             entry.busy.set(false);
@@ -96,9 +132,14 @@ public class SessionDirectory {
     public void delete(String owner, UUID id) {
         Entry entry = acquire(owner, id);
         try {
+            if (database != null) database.delete(id, owner);
             entries.remove(id, entry);
         } finally {
             entry.busy.set(false);
         }
+    }
+    @PreDestroy
+    @Override public void close() throws SQLException {
+        if (database != null) database.close();
     }
 }
