@@ -34,7 +34,7 @@ public class SecurityConfiguration {
     @Bean SecurityFilterChain security(HttpSecurity http) throws Exception {
         return http
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.GET,"/api/v1/health","/api/v1/foods/**","/api/v1/auth/csrf").permitAll()
+                .requestMatchers(HttpMethod.GET,"/","/index.html","/demo.css","/demo.js","/api/v1/health","/api/v1/foods/**","/api/v1/auth/csrf").permitAll()
                 .requestMatchers(HttpMethod.POST,"/api/v1/chat","/api/v1/nutrition/calculate","/api/v1/auth/login").permitAll()
                 .requestMatchers("/error").permitAll().anyRequest().authenticated())
             .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/chat","/api/v1/nutrition/calculate"))

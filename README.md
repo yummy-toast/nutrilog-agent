@@ -126,3 +126,15 @@ Spring Security服务端登录与内存会话目录已接入，只有demo-auth�
 服务端校验会话归属，从已提交的会话快照读取食品和用户确认重量，再复用记餐服务计算营养。未确认食品或重量时返回 400，访问他人会话返回 403。模型回答中的文字不会成为记餐输入。
 
 接口生成独立的待确认预览。后续聊天改变食品或重量时，原预览保留生成时的营养快照。核对后调用 `POST /api/v1/meals/previews/{operationId}/confirm`，此时记录才进入日报。同一次确认重试复用原 operationId。
+
+## 浏览器演示
+
+构建后，从项目根目录启动本地服务：
+
+```sh
+java -jar backend/target/nutrilog-agent-0.0.1-SNAPSHOT.jar --spring.profiles.active=demo-auth,local-db
+```
+
+打开 [本地演示页](http://127.0.0.1:8080/)，使用演示账户 `alice` / `alice-demo-only`。登录、创建会话、搜索食品和查询日报可以离线体验。要发送对话消息，先在本地环境设置 `DEEPSEEK_API_KEY`，再追加 `live` 配置重启（`demo-auth,local-db,live`）。
+
+创建会话后搜索「米饭」，选择熟米饭，填写 200 克并发送一条消息。生成午餐预览，核对营养后点击「确认记餐」，页面会刷新对应日期的日报。页面随 JAR 提供，浏览器复用服务端 Cookie 和 CSRF，无需单独启动前端。

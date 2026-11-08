@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NutriLog Agent · 饮食记录</title>
+  <link rel="stylesheet" href="/demo.css">
+  <script src="/demo.js" defer></script>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">NUTRILOG AGENT</p>
+    <h1>饮食记录</h1>
+    <p>先问营养，再确认这一餐。</p>
+  </header>
+  <main>
+    <section id="login-panel" aria-labelledby="login-title">
+      <h2 id="login-title">登录演示账户</h2>
+      <form id="login">
+        <label>用户名 <input name="username" autocomplete="username" required></label>
+        <label>密码 <input name="password" type="password" autocomplete="current-password" required></label>
+        <button>登录</button>
+      </form>
+    </section>
+    <p id="notice" role="status" aria-live="polite"></p>
+    <fieldset id="workspace" hidden>
+      <legend class="sr-only">饮食工作区</legend>
+      <div class="account"><span id="identity"></span><button id="logout">退出</button></div>
+      <div class="columns">
+        <section aria-labelledby="chat-title">
+          <h2 id="chat-title">营养对话</h2>
+          <form id="new-session" class="row">
+            <label>新会话标题 <input name="title" maxlength="100" required></label>
+            <button>创建</button>
+          </form>
+          <label>当前会话 <select id="sessions"></select></label>
+          <ol id="history" class="history"></ol>
+          <p id="selection"></p>
+          <form id="search" class="row">
+            <label>查找食品 <input name="keyword" placeholder="例如米饭" required></label>
+            <button>搜索</button>
+          </form>
+          <form id="chat">
+            <label>食品条目 <select id="foods" name="food"></select></label>
+            <label>确认重量（克） <input name="weight" type="number" min="0.001" step="0.001"></label>
+            <label>消息 <textarea name="message" rows="3" maxlength="2000" required></textarea></label>
+            <button>发送</button>
+          </form>
+        </section>
+        <div class="stack">
+          <section aria-labelledby="meal-title">
+            <h2 id="meal-title">记餐预览</h2>
+            <form id="meal" class="row">
+              <label>用餐日期 <input name="date" type="date" required></label>
+              <label>餐次 <select name="mealType">
+                <option value="BREAKFAST">早餐</option><option value="LUNCH">午餐</option>
+                <option value="DINNER">晚餐</option><option value="SNACK">加餐</option>
+              </select></label>
+              <button>生成预览</button>
+            </form>
+            <p id="preview"></p>
+            <button id="confirm" hidden>确认记餐</button>
+          </section>
+          <section aria-labelledby="daily-title">
+            <h2 id="daily-title">每日汇总</h2>
+            <form id="daily" class="row">
+              <label>查询日期 <input name="date" type="date" required></label>
+              <button>查询</button>
+            </form>
+            <p id="totals"></p>
+            <ul id="records"></ul>
+          </section>
+        </div>
+      </div>
+    </fieldset>
+  </main>
+</body>
+</html>
