@@ -23,3 +23,6 @@ button:disabled { opacity: .55; cursor: wait; }
 #preview, #totals { white-space: pre-line; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 730px) { .columns { grid-template-columns: 1fr; } }
+#records li { margin-bottom: .5rem; overflow-wrap: anywhere; }
+#records button { padding: .15rem .5rem; }
+#correction { border-top: 1px solid #d8e2d8; margin-top: 1rem; overflow-wrap: anywhere; }

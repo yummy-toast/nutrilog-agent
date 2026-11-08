@@ -8,6 +8,8 @@ const notice = byId("notice");
 const meals = { BREAKFAST: "早餐", LUNCH: "午餐", DINNER: "晚餐", SNACK: "加餐" };
 const nutrients = { energy: "热量", protein: "蛋白质", fat: "脂肪", carbohydrate: "碳水" };
 let preview;
+let editing;
+let correctionPreview;
 let busy = false;
 
 async function request(path, options) {
@@ -48,6 +50,7 @@ function showLogin() {
   }
   for (const id of ["chat", "search", "new-session"]) byId(id).reset();
   clearPreview();
+  closeCorrection();
 }
 
 async function run(action) {
@@ -156,14 +159,110 @@ function displayEnergy(nutrition) {
   return energy.amount == null ? "热量数据缺失" : `${energy.amount} ${energy.unit}`;
 }
 
+function recordSummary(details) {
+  const { nutrition } = details;
+  return [
+    details.date, meals[details.mealType], nutrition.name,
+    nutrition.weightGrams + " 克", displayEnergy(nutrition),
+    details.note ? "备注：" + details.note : null
+  ].filter(Boolean).join(" · ");
+}
+
+function clearCorrectionPreview() {
+  correctionPreview = undefined;
+  byId("correction-preview").textContent = "";
+  byId("confirm-edit").hidden = true;
+}
+
+function closeCorrection() {
+  editing = undefined;
+  clearCorrectionPreview();
+  byId("correction").hidden = true;
+  byId("correction-original").textContent = "";
+  byId("edit-meal").reset();
+}
+
+function openCorrection(record) {
+  editing = record;
+  clearCorrectionPreview();
+  const { date, mealType, nutrition, note } = record.details;
+  const fields = byId("edit-meal").elements;
+  fields.date.value = date;
+  fields.mealType.value = mealType;
+  fields.weight.value = nutrition.weightGrams;
+  fields.note.value = note ?? "";
+  byId("correction-original").textContent = "原记录 · " + recordSummary(record.details);
+  byId("correction").hidden = false;
+  fields.weight.focus();
+}
+
 async function loadDaily(date) {
   const day = await request("/meals/daily?date=" + encodeURIComponent(date));
+  closeCorrection();
   byId("totals").textContent = day.date + "\n" + displayTotals(day.totals);
-  byId("records").replaceChildren(...day.records.map(({ details }) => {
-    const { nutrition } = details;
-    return listItem(`${meals[details.mealType]} · ${nutrition.name} · ${nutrition.weightGrams} 克 · ${displayEnergy(nutrition)}`);
+  byId("records").replaceChildren(...day.records.map((record) => {
+    const item = listItem(recordSummary(record.details));
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "修改";
+    edit.addEventListener("click", () => openCorrection(record));
+    item.append(" ", edit);
+    return item;
   }));
 }
+
+async function handleCorrectionFailure(error, originalDate) {
+  if (error.code === "RECORD_CONFLICT") {
+    closeCorrection();
+    byId("daily").elements.date.value = originalDate;
+    await loadDaily(originalDate);
+    notice.textContent = "记录已被更新。已刷新日报，请从最新记录重新修改。";
+  } else if (error.code === "PREVIEW_EXPIRED") {
+    clearCorrectionPreview();
+    notice.textContent = "修改预览已过期，请重新生成。";
+  } else {
+    throw error;
+  }
+}
+
+onSubmit("edit-meal", async ({ date, mealType, weight, note }) => {
+  if (!editing) return;
+  const { details, recordId, version } = editing;
+  const changes = {};
+  if (date !== details.date) changes.date = date;
+  if (mealType !== details.mealType) changes.mealType = mealType;
+  if (Number(weight) !== details.nutrition.weightGrams) changes.weightGrams = Number(weight);
+  if (note !== (details.note ?? "")) changes.note = note;
+  clearCorrectionPreview();
+  if (Object.keys(changes).length === 0) throw new Error("请至少修改一项");
+  try {
+    correctionPreview = await post("/meals/records/" + recordId + "/correction-previews", {
+      expectedVersion: version, ...changes
+    });
+    byId("correction-preview").textContent = "修改后 · " + recordSummary(correctionPreview.details);
+    byId("confirm-edit").hidden = false;
+  } catch (error) {
+    await handleCorrectionFailure(error, details.date);
+  }
+});
+
+byId("edit-meal").addEventListener("input", clearCorrectionPreview);
+byId("cancel-edit").addEventListener("click", closeCorrection);
+byId("confirm-edit").addEventListener("click", () => run(async () => {
+  if (!correctionPreview || !editing) return;
+  let result;
+  try {
+    result = await post("/meals/previews/" + correctionPreview.operationId + "/confirm");
+  } catch (error) {
+    await handleCorrectionFailure(error, editing.details.date);
+    return;
+  }
+  closeCorrection();
+  const date = result.details.date;
+  byId("daily").elements.date.value = date;
+  await loadDaily(date);
+  notice.textContent = "记餐已更新";
+}));
 
 onSubmit("login", async (data, form) => {
   await post("/auth/login", new URLSearchParams(data));

@@ -69,6 +69,22 @@
             </form>
             <p id="totals"></p>
             <ul id="records"></ul>
+            <div id="correction" hidden>
+              <h3>修改记录</h3>
+              <p id="correction-original"></p>
+              <form id="edit-meal">
+                <label>用餐日期 <input name="date" type="date" required></label>
+                <label>餐次 <select name="mealType">
+                  <option value="BREAKFAST">早餐</option><option value="LUNCH">午餐</option>
+                  <option value="DINNER">晚餐</option><option value="SNACK">加餐</option>
+                </select></label>
+                <label>重量（克） <input name="weight" type="number" min="0.001" step="0.001" required></label>
+                <label>备注 <textarea name="note" rows="2" maxlength="500"></textarea></label>
+                <div class="row"><button>预览修改</button><button id="cancel-edit" type="button">取消</button></div>
+              </form>
+              <p id="correction-preview"></p>
+              <button id="confirm-edit" hidden>确认修改</button>
+            </div>
           </section>
         </div>
       </div>
