@@ -1,5 +1,6 @@
 package com.nutrilog.meal;
 
+import com.nutrilog.session.SessionDirectory;
 import java.security.Principal;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -20,12 +21,34 @@ import org.springframework.web.server.ResponseStatusException;
 public class MealController {
     private final MealRecords records;
 
-    public MealController(MealRecords records) { this.records = records; }
+    private final SessionDirectory sessions;
+
+    public MealController(MealRecords records, SessionDirectory sessions) {
+        this.records = records;
+        this.sessions = sessions;
+    }
+
+    public record SessionPreviewRequest(UUID sessionId, LocalDate date, MealRecords.MealType mealType) {}
 
     @PostMapping("/previews")
     @ResponseStatus(HttpStatus.CREATED)
     public MealRecords.View preview(Principal principal, @RequestBody MealRecords.PreviewRequest request) {
         return records.preview(principal.getName(), request);
+    }
+
+    @PostMapping("/previews/from-session")
+    @ResponseStatus(HttpStatus.CREATED)
+    public MealRecords.View previewFromSession(Principal principal, @RequestBody SessionPreviewRequest request) {
+        if (request.sessionId() == null)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "必须指定会话");
+        String owner = principal.getName();
+        var state = sessions.snapshot(owner, request.sessionId()).state();
+        if (state.selectedFoodId() == null || state.weightGrams() == null
+            || !"USER_CONFIRMED".equals(state.weightBasis()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先在会话中确认食品和重量");
+
+        return records.preview(owner, new MealRecords.PreviewRequest(
+            state.selectedFoodId(), state.weightGrams(), request.date(), request.mealType()));
     }
 
     @GetMapping("/previews/{id}")
@@ -54,6 +77,7 @@ public class MealController {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, String>> handle(ResponseStatusException error) {
         String code = switch (error.getStatusCode().value()) {
+            case 403 -> "SESSION_ACCESS_DENIED";
             case 404 -> "NOT_FOUND";
             case 409 -> "RECORD_CONFLICT";
             case 422 -> "NUTRITION_SNAPSHOT_UNAVAILABLE";

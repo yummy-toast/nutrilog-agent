@@ -5,6 +5,11 @@ import com.nutrilog.chat.*;
 import com.nutrilog.agent.FoodAgentTools;
 import com.nutrilog.food.FoodService;
 import com.nutrilog.food.JsonFoodCatalog;
+import com.nutrilog.meal.MealController;
+import com.nutrilog.meal.MealRecords;
+import java.nio.file.Path;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.core.env.MapPropertySource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -25,8 +30,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.junit.jupiter.api.Assertions.*;
 
 class SessionSecurityTest {
+    @TempDir Path data;
     @Configuration @EnableWebSecurity @EnableWebMvc
-    @Import({SecurityConfiguration.class,AuthController.class,SessionDirectory.class,SessionController.class,SessionErrorHandler.class,SessionChatController.class,ChatService.class,SpringAiChatGateway.class,ChatErrorHandler.class,ChatTraceConfiguration.class})
+    @Import({SecurityConfiguration.class,AuthController.class,SessionDirectory.class,SessionController.class,SessionErrorHandler.class,SessionChatController.class,ChatService.class,SpringAiChatGateway.class,ChatErrorHandler.class,ChatTraceConfiguration.class,MealController.class,MealRecords.class})
     static class Config {
         @Bean FoodService foods() { return new FoodService(new JsonFoodCatalog()); }
         @Bean FoodAgentTools foodTools(FoodService foods) { return new FoodAgentTools(foods); }
@@ -178,5 +184,61 @@ class SessionSecurityTest {
             assertTrue(alice.isInvalid());
             assertEquals(401,api.perform(get("/api/v1/auth/me")).andReturn().getResponse().getStatus());
         }
+    }
+
+    @Test void createsMealPreviewOnlyFromOwnedConfirmedSessionState() throws Exception {
+        try (var context = new AnnotationConfigWebApplicationContext()) {
+            context.setServletContext(new MockServletContext());
+            context.getEnvironment().setActiveProfiles("demo-auth", "local-db");
+            context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("test",
+                java.util.Map.of("nutrilog.session.jdbc-url", "jdbc:h2:file:" + data.resolve("meals"))));
+            context.register(Config.class);
+            context.refresh();
+            var api = MockMvcBuilders.webAppContextSetup(context)
+                .addFilters(context.getBean("springSecurityFilterChain", Filter.class)).build();
+            var alice = login(api, "alice", "alice-demo-only");
+            var bob = login(api, "bob", "bob-demo-only");
+            var directory = context.getBean(SessionDirectory.class);
+            String id = directory.create("alice", "午餐").sessionId().toString();
+            String body = """
+                    {"sessionId":"%s","date":"2026-11-06","mealType":"LUNCH","foodId":169756,"weightGrams":1}
+                    """.formatted(id);
+            assertEquals(403, api.perform(post("/api/v1/meals/previews/from-session").session(alice)
+                .contentType("application/json").content(body)).andReturn().getResponse().getStatus());
+            assertEquals(403, sessionMealPreview(api, bob, body).getStatus());
+
+            assertEquals(200, send(api, alice, id, "查熟米饭").getStatus());
+            assertEquals(200, send(api, alice, id, "200克呢？").getStatus());
+            assertEquals(400, sessionMealPreview(api, alice, body).getStatus());
+
+            assertEquals(200, send(api, alice, id, java.util.Map.of("message", "确认熟米饭",
+                "selectedFoodId", 168935, "weightGrams", 200)).getStatus());
+            var response = sessionMealPreview(api, alice, body);
+            assertEquals(201, response.getStatus(), response.getContentAsString());
+            var json = JsonMapper.builder().build();
+            var preview = json.readTree(response.getContentAsByteArray());
+            assertEquals("PENDING", preview.get("status").asString());
+            assertTrue(preview.get("recordId").isNull());
+            var nutrition = preview.get("details").get("nutrition");
+            assertEquals(168935, nutrition.get("foodId").asInt());
+            assertEquals(260, nutrition.get("energy").get("amount").asInt());
+
+            var records = context.getBean(MealRecords.class);
+            var day = java.time.LocalDate.parse("2026-11-06");
+            assertTrue(records.daily("alice", day).records().isEmpty());
+            assertEquals(200, send(api, alice, id, java.util.Map.of("message", "更新重量", "weightGrams", 250)).getStatus());
+            String operation = preview.get("operationId").asString();
+            assertEquals(200, api.perform(post("/api/v1/meals/previews/" + operation + "/confirm").session(alice)
+                .header("X-CSRF-TOKEN", csrf(api, alice))).andReturn().getResponse().getStatus());
+            assertEquals(new java.math.BigDecimal("260.00"),
+                records.daily("alice", day).records().getFirst().details().nutrition().energy().amount());
+        }
+    }
+
+    private MockHttpServletResponse sessionMealPreview(MockMvc api, MockHttpSession session, String body)
+        throws Exception {
+        return api.perform(post("/api/v1/meals/previews/from-session").session(session)
+            .header("X-CSRF-TOKEN", csrf(api, session)).contentType("application/json").content(body))
+            .andReturn().getResponse();
     }
 }

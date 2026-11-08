@@ -118,3 +118,11 @@ Spring Security服务端登录与内存会话目录已接入，只有demo-auth�
 新预览保存每百克营养数据。同食品修改重量使用原数据，更换食品使用新条目，只改备注、日期或餐次保留计算结果。启动时给已有本地数据库补列。旧快照缺少每百克原值时，改变原食品重量返回 422 NUTRITION_SNAPSHOT_UNAVAILABLE，仍可修改元数据，或选择另一食品并确认新的营养快照。
 
 49 项 Java 测试通过，包含旧库升级、快照重算、旧版本冲突和重试。打包应用通过纠正预览、确认及日报只计一条记录的 HTTP 检查。
+
+## 从对话生成记餐预览
+
+使用 `local-db`。用户在会话消息中通过 `selectedFoodId` 和 `weightGrams` 明确选择食品和重量。带登录 Cookie 和 CSRF 头调用 `POST /api/v1/meals/previews/from-session`，请求体只需 `sessionId`、`date` 和 `mealType`。
+
+服务端校验会话归属，从已提交的会话快照读取食品和用户确认重量，再复用记餐服务计算营养。未确认食品或重量时返回 400，访问他人会话返回 403。模型回答中的文字不会成为记餐输入。
+
+接口生成独立的待确认预览。后续聊天改变食品或重量时，原预览保留生成时的营养快照。核对后调用 `POST /api/v1/meals/previews/{operationId}/confirm`，此时记录才进入日报。同一次确认重试复用原 operationId。
