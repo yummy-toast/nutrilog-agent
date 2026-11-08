@@ -72,7 +72,12 @@
             <div id="correction" hidden>
               <h3>修改记录</h3>
               <p id="correction-original"></p>
+              <form id="replacement-search" class="row">
+                <label>查找替换食品 <input name="keyword" placeholder="例如鸡蛋" required></label>
+                <button>搜索</button>
+              </form>
               <form id="edit-meal">
+                <label>替换食品 <select id="replacement-foods" name="food"></select></label>
                 <label>用餐日期 <input name="date" type="date" required></label>
                 <label>餐次 <select name="mealType">
                   <option value="BREAKFAST">早餐</option><option value="LUNCH">午餐</option>

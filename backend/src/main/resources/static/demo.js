@@ -4,6 +4,7 @@ const byId = (id) => document.getElementById(id);
 const workspace = byId("workspace");
 const sessions = byId("sessions");
 const foods = byId("foods");
+const replacementFoods = byId("replacement-foods");
 const notice = byId("notice");
 const meals = { BREAKFAST: "早餐", LUNCH: "午餐", DINNER: "晚餐", SNACK: "加餐" };
 const nutrients = { energy: "热量", protein: "蛋白质", fat: "脂肪", carbohydrate: "碳水" };
@@ -154,6 +155,14 @@ function displayTotals(totals) {
   }).join("\n");
 }
 
+function nutritionLines(nutrition, labels = nutrients) {
+  const values = Object.entries(labels).map(([key, label]) => {
+    const { amount, unit } = nutrition[key];
+    return label + " · " + (amount == null ? "数据缺失" : amount + " " + unit);
+  });
+  return [...values, "来源：" + nutrition.source.name];
+}
+
 function displayEnergy(nutrition) {
   const { energy } = nutrition;
   return energy.amount == null ? "热量数据缺失" : `${energy.amount} ${energy.unit}`;
@@ -180,11 +189,13 @@ function closeCorrection() {
   byId("correction").hidden = true;
   byId("correction-original").textContent = "";
   byId("edit-meal").reset();
+  byId("replacement-search").reset();
+  selectOptions(replacementFoods, "保留原食品", []);
 }
 
 function openCorrection(record) {
+  closeCorrection();
   editing = record;
-  clearCorrectionPreview();
   const { date, mealType, nutrition, note } = record.details;
   const fields = byId("edit-meal").elements;
   fields.date.value = date;
@@ -225,13 +236,50 @@ async function handleCorrectionFailure(error, originalDate) {
   }
 }
 
-onSubmit("edit-meal", async ({ date, mealType, weight, note }) => {
+async function searchFoods(keyword) {
+  return request("/foods?keyword=" + encodeURIComponent(keyword));
+}
+
+onSubmit("replacement-search", async ({ keyword }) => {
+  if (!editing) return;
+  const matches = (await searchFoods(keyword))
+    .filter((food) => food.id !== editing.details.nutrition.foodId);
+  const previousChoice = replacementFoods.value;
+  selectOptions(replacementFoods, "保留原食品", matches.map((food) => [food.id, displayFood(food)]));
+  if (matches.some((food) => String(food.id) === previousChoice)) {
+    replacementFoods.value = previousChoice;
+  } else if (previousChoice) {
+    restoreOriginalWeight();
+    clearCorrectionPreview();
+  }
+  notice.textContent = matches.length ? `找到 ${matches.length} 个替换候选` : "没有可替换的食品，请更换关键词";
+});
+
+function restoreOriginalWeight() {
+  byId("edit-meal").elements.weight.value = editing.details.nutrition.weightGrams;
+}
+
+replacementFoods.addEventListener("change", () => {
+  clearCorrectionPreview();
+  if (replacementFoods.value) {
+    const weight = byId("edit-meal").elements.weight;
+    weight.value = "";
+    weight.focus();
+    notice.textContent = "请填写替换食品的重量";
+  } else {
+    restoreOriginalWeight();
+    notice.textContent = "";
+  }
+});
+
+onSubmit("edit-meal", async ({ date, mealType, weight, note, food }) => {
   if (!editing) return;
   const { details, recordId, version } = editing;
   const changes = {};
   if (date !== details.date) changes.date = date;
   if (mealType !== details.mealType) changes.mealType = mealType;
-  if (Number(weight) !== details.nutrition.weightGrams) changes.weightGrams = Number(weight);
+  if (food) changes.foodId = Number(food);
+  if (food || Number(weight) !== details.nutrition.weightGrams) changes.weightGrams = Number(weight);
   if (note !== (details.note ?? "")) changes.note = note;
   clearCorrectionPreview();
   if (Object.keys(changes).length === 0) throw new Error("请至少修改一项");
@@ -239,7 +287,12 @@ onSubmit("edit-meal", async ({ date, mealType, weight, note }) => {
     correctionPreview = await post("/meals/records/" + recordId + "/correction-previews", {
       expectedVersion: version, ...changes
     });
-    byId("correction-preview").textContent = "修改后 · " + recordSummary(correctionPreview.details);
+    const updated = correctionPreview.details;
+    const { energy, ...otherNutrients } = nutrients;
+    byId("correction-preview").textContent = [
+      "修改后 · " + recordSummary(updated),
+      ...nutritionLines(updated.nutrition, otherNutrients)
+    ].join("\n");
     byId("confirm-edit").hidden = false;
   } catch (error) {
     await handleCorrectionFailure(error, details.date);
@@ -284,7 +337,7 @@ sessions.addEventListener("change", () => run(async () => {
   await loadHistory();
 }));
 onSubmit("search", async ({ keyword }) => {
-  const matches = await request("/foods?keyword=" + encodeURIComponent(keyword));
+  const matches = await searchFoods(keyword);
   selectOptions(foods, "请选择搜索结果", matches.map((food) => [food.id, displayFood(food)]));
   notice.textContent = matches.length ? `找到 ${matches.length} 个候选` : "没有匹配食品，请更换关键词";
 });
@@ -301,15 +354,10 @@ onSubmit("meal", async ({ date, mealType }) => {
   const result = await post("/meals/previews/from-session", { sessionId: sessions.value, date, mealType });
   preview = result;
   const { nutrition } = result.details;
-  const values = Object.entries(nutrients).map(([key, label]) => {
-    const { amount, unit } = nutrition[key];
-    return label + " · " + (amount == null ? "数据缺失" : amount + " " + unit);
-  });
   byId("preview").textContent = [
     date + " · " + meals[mealType],
     nutrition.name + " · " + nutrition.weightGrams + " 克",
-    ...values,
-    "来源：" + nutrition.source.name
+    ...nutritionLines(nutrition)
   ].join("\n");
   byId("confirm").hidden = false;
 });

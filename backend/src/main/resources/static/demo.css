@@ -20,7 +20,7 @@ button:disabled { opacity: .55; cursor: wait; }
 .history li { padding: .5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .history li:nth-child(odd) { background: #eff5ef; }
 #notice { min-height: 1.55rem; color: #873819; }
-#preview, #totals { white-space: pre-line; }
+#preview, #totals, #correction-preview { white-space: pre-line; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 730px) { .columns { grid-template-columns: 1fr; } }
 #records li { margin-bottom: .5rem; overflow-wrap: anywhere; }
