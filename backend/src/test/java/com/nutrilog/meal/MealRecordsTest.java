@@ -124,7 +124,7 @@ class MealRecordsTest {
         return new MealRecords.PreviewRequest(request.foodId(), request.weightGrams(), date, request.mealType());
     }
 
-    @Test void correctionPreservesSnapshotAndRejectsStaleConfirmations() {
+    @Test void correctionPreservesSnapshotAndRejectsStaleConfirmations() throws Exception {
         var initial = records(now);
         var original = initial.confirm("alice", initial.preview("alice", request()).operationId());
         String url = "jdbc:h2:file:" + data.resolve("meals");
@@ -159,6 +159,23 @@ class MealRecordsTest {
         assertEquals("补充备注", day.records().getFirst().details().note());
         assertEquals(applied.details().nutrition(), day.records().getFirst().details().nutrition());
         assertEquals(applied, service.confirm("alice", first.operationId()));
+        try (var connection = java.sql.DriverManager.getConnection(url, "sa", "");
+             var statement = connection.createStatement();
+             var audit = statement.executeQuery("""
+                 SELECT operation_id, owner_name, record_id, event_type, record_version
+                 FROM meal_audit ORDER BY record_version
+                 """)) {
+            for (var event : java.util.List.of(original, applied, service.get("alice", moved.operationId()))) {
+                assertTrue(audit.next());
+                assertEquals(event.operationId().toString(), audit.getString("operation_id"));
+                assertEquals("alice", audit.getString("owner_name"));
+                assertEquals(original.recordId().toString(), audit.getString("record_id"));
+                assertEquals(event.version() == 1L ? "MEAL_CREATED" : "MEAL_CORRECTED", audit.getString("event_type"));
+                assertEquals(event.version(), audit.getLong("record_version"));
+            }
+            assertFalse(audit.next());
+        }
+
     }
 
     @Test void legacyRowsCanBeEditedWithoutInventingPer100gValues() throws Exception {

@@ -65,6 +65,16 @@ public class MealRecords {
             statement.execute("ALTER TABLE meal_operation ADD COLUMN IF NOT EXISTS expected_version BIGINT");
             statement.execute("ALTER TABLE meal_operation ADD COLUMN IF NOT EXISTS record_version BIGINT DEFAULT 1 NOT NULL");
             statement.execute("ALTER TABLE meal_operation ADD COLUMN IF NOT EXISTS current_details CLOB");
+            statement.execute("""
+                CREATE TABLE IF NOT EXISTS meal_audit (
+                    operation_id VARCHAR(36) PRIMARY KEY,
+                    owner_name VARCHAR(255) NOT NULL,
+                    record_id VARCHAR(36) NOT NULL,
+                    event_type VARCHAR(24) NOT NULL,
+                    record_version BIGINT NOT NULL,
+                    occurred_at BIGINT NOT NULL
+                )
+                """);
         } catch (SQLException error) {
             throw new IllegalStateException("无法初始化记餐数据库", error);
         }
@@ -179,6 +189,7 @@ public class MealRecords {
                     update.executeUpdate();
                 }
                 View result = read(connection, owner, id, false).view();
+                auditConfirmation(connection, owner, result);
                 connection.commit();
                 return result;
             } catch (SQLException | RuntimeException error) {
@@ -187,6 +198,21 @@ public class MealRecords {
             }
         } catch (SQLException error) {
             throw unavailable();
+        }
+    }
+
+    private void auditConfirmation(Connection connection, String owner, View result) throws SQLException {
+        try (var statement = connection.prepareStatement("""
+            INSERT INTO meal_audit (operation_id, owner_name, record_id, event_type, record_version, occurred_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """)) {
+            statement.setString(1, result.operationId().toString());
+            statement.setString(2, owner);
+            statement.setString(3, result.recordId().toString());
+            statement.setString(4, result.targetRecordId() == null ? "MEAL_CREATED" : "MEAL_CORRECTED");
+            statement.setLong(5, result.version());
+            statement.setLong(6, result.confirmedAt().toEpochMilli());
+            statement.executeUpdate();
         }
     }
 

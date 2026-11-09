@@ -14,7 +14,7 @@ let correctionPreview;
 let busy = false;
 
 async function request(path, options) {
-  const response = await fetch("/api/v1" + path, { cache: "no-store", ...options });
+  const response = await fetch("/api/v1" + path, { cache: "no-store", signal: AbortSignal.timeout(65000), ...options });
   const result = await response.json();
   if (!response.ok) {
     const messages = {
@@ -40,6 +40,30 @@ async function post(path, body) {
     },
     body: isForm ? body : JSON.stringify(body)
   });
+}
+
+async function confirmOperation(operationId) {
+  const path = "/meals/previews/" + operationId;
+  try {
+    return await post(path + "/confirm");
+  } catch (error) {
+    if (error.status && error.status < 500) throw error;
+  }
+
+  let operation;
+  try {
+    operation = await request(path);
+  } catch (error) {
+    if (error.status && error.status < 500) throw error;
+    throw new Error("暂时无法核对确认结果。恢复连接后，请用当前预览重试确认。");
+  }
+  if (operation.status === "CONFIRMED") return operation;
+  if (operation.status === "EXPIRED") {
+    const error = new Error("预览已过期，请重新生成。");
+    error.code = "PREVIEW_EXPIRED";
+    throw error;
+  }
+  throw new Error("目前仍待确认。请用当前预览重试确认。");
 }
 
 function showLogin() {
@@ -305,7 +329,7 @@ byId("confirm-edit").addEventListener("click", () => run(async () => {
   if (!correctionPreview || !editing) return;
   let result;
   try {
-    result = await post("/meals/previews/" + correctionPreview.operationId + "/confirm");
+    result = await confirmOperation(correctionPreview.operationId);
   } catch (error) {
     await handleCorrectionFailure(error, editing.details.date);
     return;
@@ -363,7 +387,13 @@ onSubmit("meal", async ({ date, mealType }) => {
 });
 byId("confirm").addEventListener("click", () => run(async () => {
   if (!preview) return;
-  const result = await post("/meals/previews/" + preview.operationId + "/confirm");
+  let result;
+  try {
+    result = await confirmOperation(preview.operationId);
+  } catch (error) {
+    if (error.code === "PREVIEW_EXPIRED") clearPreview();
+    throw error;
+  }
   byId("preview").textContent += "\n已确认";
   byId("confirm").hidden = true;
   preview = undefined;
