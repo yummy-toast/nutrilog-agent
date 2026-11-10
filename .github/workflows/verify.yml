@@ -19,7 +19,7 @@ jobs:
       - name: Verify Compose
         run: |
           docker compose up --build -d
-          curl --retry 30 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8080/api/v1/health
+          curl --retry 30 --retry-all-errors --retry-delay 1 --max-time 5 -fsS http://127.0.0.1:8080/api/v1/health
           python3 scripts/evaluate.py --url http://127.0.0.1:8080 --suite all
       - name: Print container logs
         if: failure()
@@ -27,3 +27,27 @@ jobs:
       - name: Stop Compose
         if: always()
         run: docker compose down
+  release:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.head_commit.message == 'Release NutriLog Agent v1.0.0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: ./backend/mvnw -B -f backend/pom.xml -DskipTests package
+      - name: Publish v1.0.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.0.0 backend/target/nutrilog-agent-1.0.0.jar \
+            --target "$GITHUB_SHA" --title "NutriLog Agent v1.0.0" \
+            --notes "本地饮食管理 Agent，包含 USDA 食品查询、营养计算、多轮对话、记餐确认、日报、纠正与审计。提供可运行 JAR、Compose 本地演示和离线回归。运行步骤见 docs/release-1.0.0.md。"
