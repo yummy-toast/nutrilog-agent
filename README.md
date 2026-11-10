@@ -2,16 +2,16 @@
 
 用于Java后端实习学习的饮食管理Agent，按小任务逐步实现。
 
-当前进度：只读食品与单轮Agent、执行预算、请求追踪，以及本地演示登录/会话归属。数据库和多轮消息尚未实现；以下按日期保留阶段记录。
+当前版本覆盖食品查询、营养计算、多轮会话、记餐预览与确认、日报、记录纠正及审计。食品目录包含 3 条可追溯的 USDA 样本。本地演示账号由 `demo-auth` 启用，记餐与会话数据由 `local-db` 写入本地 H2。
 
-## 已实现与验证
+## Compose 本地演示
 
-- Java21 / Spring Boot 4.0.6 / Spring AI 2.0.2项目骨架。
-- 确定性热量计算工具、参数校验、JSON工具协议测试。
-- 6项离线测试通过；无模型密钥可启动，HTTP健康检查返回200。
-- DeepSeek真实工具调用冒烟：输入116千卡/100克、200克，工具执行1次并返回232.00，模型回答232千卡。
+在项目根目录运行 `docker compose up --build -d`，然后打开 [演示页](http://127.0.0.1:8080/)。
+默认启用 `demo-auth,local-db`。H2 数据保存在命名卷，普通停止或重建容器后仍可使用。
 
-以上仅证明最小链路；已有3条USDA文件目录；尚未实现数据库、登录、记餐、多轮对话、执行步数保护或完整Agent。测试用116是人工提供的协议测试数值，不作为某种食物的营养事实。
+需要体验真实对话时，在本地环境配置 `DEEPSEEK_API_KEY`，然后以
+`NUTRILOG_PROFILES=demo-auth,local-db,live docker compose up --build -d` 启动。真实模型请求会产生费用。
+演示步骤和评测范围见 [v1.0.0 验证指南](docs/release-1.0.0.md)。
 
 ## 本地启动
 
@@ -23,7 +23,7 @@
 export JAVA_HOME="$PWD/.tools/jdk/Contents/Home"
 export PATH="$JAVA_HOME/bin:$PWD/.tools/apache-maven-3.9.9/bin:$PATH"
 mvn -Dmaven.repo.local="$PWD/.tools/m2" -f backend/pom.xml verify
-java -jar backend/target/nutrilog-agent-0.0.1-SNAPSHOT.jar
+java -jar backend/target/nutrilog-agent-1.0.0.jar
 ```
 
 访问 `http://127.0.0.1:8080/api/v1/health`，默认仅监听本机且不调用模型。
@@ -132,7 +132,7 @@ Spring Security服务端登录与内存会话目录已接入，只有demo-auth�
 构建后，从项目根目录启动本地服务：
 
 ```sh
-java -jar backend/target/nutrilog-agent-0.0.1-SNAPSHOT.jar --spring.profiles.active=demo-auth,local-db
+java -jar backend/target/nutrilog-agent-1.0.0.jar --spring.profiles.active=demo-auth,local-db
 ```
 
 打开 [本地演示页](http://127.0.0.1:8080/)，使用演示账户 `alice` / `alice-demo-only`。登录、创建会话、搜索食品和查询日报可以离线体验。要发送对话消息，先在本地环境设置 `DEEPSEEK_API_KEY`，再追加 `live` 配置重启（`demo-auth,local-db,live`）。

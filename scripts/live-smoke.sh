@@ -12,5 +12,5 @@ if [[ -x .tools/jdk/Contents/Home/bin/java ]]; then
   java_command="$PWD/.tools/jdk/Contents/Home/bin/java"
 fi
 "$java_command" -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 \
-  -jar backend/target/nutrilog-agent-0.0.1-SNAPSHOT.jar \
+  -jar backend/target/nutrilog-agent-1.0.0.jar \
   --spring.profiles.active="live,$smoke_profile" --spring.main.web-application-type=none

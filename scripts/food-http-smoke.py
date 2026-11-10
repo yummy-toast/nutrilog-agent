@@ -19,7 +19,7 @@ def request(path, body=None):
 
 with (root / '.tools/food-http.log').open('w') as log:
     process = subprocess.Popen([str(root / '.tools/jdk/Contents/Home/bin/java'), '-jar',
-        str(root / 'backend/target/nutrilog-agent-0.0.1-SNAPSHOT.jar'), '--server.port=18081'],
+        str(root / 'backend/target/nutrilog-agent-1.0.0.jar'), '--server.port=18081'],
         stdout=log, stderr=subprocess.STDOUT)
     try:
         for _ in range(60):

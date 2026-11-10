@@ -1,0 +1,11 @@
+**
+!backend/
+!backend/pom.xml
+!backend/mvnw
+!backend/.mvn/
+!backend/.mvn/**
+!backend/src/
+!backend/src/**
+!data/
+!data/usda/
+!data/usda/selected-foods.json

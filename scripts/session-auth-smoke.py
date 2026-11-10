@@ -43,7 +43,7 @@ class Browser:
 
 with (root/'.tools/session-auth.log').open('w') as log:
     process=subprocess.Popen([str(root/'.tools/jdk/Contents/Home/bin/java'),'-jar',
-        str(root/'backend/target/nutrilog-agent-0.0.1-SNAPSHOT.jar'),
+        str(root/'backend/target/nutrilog-agent-1.0.0.jar'),
         *([] if args.no_demo else ['--spring.profiles.active=demo-auth']),'--server.port=18083'],stdout=log,stderr=subprocess.STDOUT)
     try:
         anon=Browser()

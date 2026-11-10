@@ -15,7 +15,7 @@ root = Path(__file__).resolve().parent.parent
 if args.live and not os.environ.get('DEEPSEEK_API_KEY'):
     raise SystemExit('请先在本地配置DEEPSEEK_API_KEY')
 command = [str(root/'.tools/jdk/Contents/Home/bin/java'), '-Dstdout.encoding=UTF-8',
-           '-Dstderr.encoding=UTF-8', '-jar', str(root/'backend/target/nutrilog-agent-0.0.1-SNAPSHOT.jar'),
+           '-Dstderr.encoding=UTF-8', '-jar', str(root/'backend/target/nutrilog-agent-1.0.0.jar'),
            '--server.port=18082']
 if args.live:
     command.append('--spring.profiles.active=live')

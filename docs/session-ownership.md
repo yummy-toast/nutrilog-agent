@@ -30,7 +30,7 @@
 构建后启动demo-auth配置，不需要模型密钥：
 
 ```sh
-.tools/jdk/Contents/Home/bin/java -jar backend/target/nutrilog-agent-0.0.1-SNAPSHOT.jar --spring.profiles.active=demo-auth
+.tools/jdk/Contents/Home/bin/java -jar backend/target/nutrilog-agent-1.0.0.jar --spring.profiles.active=demo-auth
 ```
 
 ```sh

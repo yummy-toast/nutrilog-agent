@@ -21,7 +21,7 @@ ChatController检查入口，ChatService作防御校验并分类错误，SpringA
 先按README构建并在本地设置DEEPSEEK_API_KEY，然后启动：
 
 ```sh
-.tools/jdk/Contents/Home/bin/java -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -jar backend/target/nutrilog-agent-0.0.1-SNAPSHOT.jar --spring.profiles.active=live
+.tools/jdk/Contents/Home/bin/java -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -jar backend/target/nutrilog-agent-1.0.0.jar --spring.profiles.active=live
 ```
 
 ```sh

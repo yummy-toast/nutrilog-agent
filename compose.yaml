@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      SPRING_PROFILES_ACTIVE: ${NUTRILOG_PROFILES:-demo-auth,local-db}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - meals:/app/.data
+volumes:
+  meals:
